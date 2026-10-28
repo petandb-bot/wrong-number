@@ -618,7 +618,7 @@ function attemptP5(){
  script.onerror=()=>console.info('p5 CDN unavailable; internal Canvas fallback active');
  document.head.appendChild(script);
 }
-function init(){renderPads();bindControls();updateText();startCanvasFallback();attemptP5();if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('./sw.js?v=0.1.8', {updateViaCache:'none'}).catch(err=>console.warn('SW:',err));}
+function init(){renderPads();bindControls();updateText();startCanvasFallback();attemptP5();if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('./sw.js?v=0.1.8.1', {updateViaCache:'none'}).catch(err=>console.warn('SW:',err));}
 init();
 window.WrongNumberDebug={balancePattern,generateOpen,generateFull,getScene:()=>deepCopy(scene),isPlaying:()=>isPlaying,isRecording:()=>!!tape,isDubArmed:()=>dubArmed,pendingDub:()=>deepCopy(pendingDub),setDub,commitDub,snapToStep,cycleAnchor:()=>cycleAnchor,playPad,captureRecent,mutate,fresh,undo,startLoop,stopLoop,startTape,stopTape,exportWav,renderPads,setKit,kitLabel,audioState:()=>({context:live?.state||'none',kit:scene.kit,master:engine?.dry?.gain?.value??null})};
 })();

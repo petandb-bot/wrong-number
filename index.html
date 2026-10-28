@@ -11,8 +11,8 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="apple-touch-icon" href="assets/icon-180.png">
   <link rel="icon" href="assets/icon-192.png">
-  <link rel="stylesheet" href="style.css?v=0.1.8">
-  <title>WRONG NUMBER — PLAYABLE SPACE (v0.1.8)</title>
+  <link rel="stylesheet" href="style.css?v=0.1.8.1">
+  <title>WRONG NUMBER — PLAYABLE SPACE (v0.1.8.1)</title>
 </head>
 <body>
   <main class="shell" aria-label="WRONG NUMBER pocket instrument">
@@ -59,25 +59,22 @@
       <a id="download-link" href="#" download="wrong-number-loop.wav" hidden>DOWNLOAD WAV</a>
       <button id="btn-share" hidden>SHARE / SAVE TO FILES</button>
     </div>
-    <footer class="footer-line"><span id="live-message">CANDY KIT / READY</span><span>v0.1.8 ✳</span></footer>
+    <footer class="footer-line"><span id="live-message">CANDY KIT / READY</span><span>v0.1.8.1 ✳</span></footer>
   </main>
-  <details class="help">
-    <summary>MANUAL / HOW TO PLAY</summary>
+  <details class="help" lang="ja">
+    <summary>使い方</summary>
     <div class="help-content">
-      <p><b>PADS:</b> Tap to play immediately, tap rapidly for a new attack, or hold for tempo-related repeating fragments. Different pad groups respond with different repeat rhythms. Multiple fingers can play together. No timing skills required.</p>
-      <p><b>SOUND KIT:</b> Use the arrows or tap the kit name to switch between CANDY KIT, TOY MALFUNCTION, SUGAR POISON, ROTTEN CARROT and WORM PARADE. The current loop keeps playing; its sounds change immediately on the next notes.</p>
-      <p><b>LIVE JAM:</b> Start LOOP and play any pads on top of the sparse beat. The background gently makes room when you play. Your live performance sounds immediately and does not change the pattern.</p>
-      <p><b>● DUB / OVERDUB:</b> Tap DUB to arm recording (and start the loop if stopped). Play pads, then tap DUB to finish. Played notes are snapped to the nearest 16th-note grid, but you hear each pad instantly without quantized delay. Notes start repeating from the following loop pass. New hits replace nearby notes in the same register rather than piling them on top of each other. DUB works with long-press repeats too. Tap LOOP to stop and save any waiting notes.</p>
-      <p><b>LOOP:</b> Capture recent free playing into two bars, or generate a beat if your history is empty. Tap again to stop. When DUB is off, tapping pads never edits the loop.</p>
-      <p><b>MUTATE:</b> Move and transform notes rather than piling up extra sounds. Tap MUTATE to produce an audible variation and begin playback if stopped. Hold for a wilder transformation. The LCD shows the new number of notes.</p>
-      <p><b>KEEP:</b> Save a pattern and kit snapshot. <b>RESTORE:</b> Recall it. Hold RESTORE to undo previous changes, including overdubs (up to eight states). Changing a pattern while DUB is armed will finish DUB first.</p>
-      <p><b>TAPE:</b> Record your playing and the live loop for up to 30 seconds, then save a WAV with a natural tail. <b>WAV:</b> Export an exact two-bar seamless loop as 44.1 kHz, 16-bit stereo PCM.</p>
-      <p><b>NEW:</b> Tap for a sparse, playable beat with room for your hands. Hold NEW for a busy FULL groove when you just want to listen. <b>− / +:</b> Adjust tempo. Desktop keyboard: <kbd>1 2 3 4 / Q W E R / A S D F / Z X C V</kbd>.</p>
-      <p><b>NOTE:</b> MIC and FILE have been removed in this version to avoid unstable recording behavior on mobile browsers. Your old patterns still load; previous imported sample banks are not used or erased by this app. All sound is generated locally. Start at a comfortable listening volume.</p>
+      <p><b>はじめに：</b>NEWでビートを作り、LOOPで再生。あとは自由にパッドを叩いてください。</p>
+      <p><b>PAD：</b>タップで発音。長押しでリズムに合わせて連打します。</p>
+      <p><b>DUB：</b>押してから演奏するとループに記録。もう一度押すと終了します。</p>
+      <p><b>MUTATE：</b>ビートを変化させます。長押しすると変化が大きくなります。</p>
+      <p><b>KEEP / RESTORE：</b>気に入った状態を保存・復元。RESTORE長押しで直前の変更を取り消せます。</p>
+      <p><b>NEW長押し：</b>音数の多いビートを生成。KITとBPMは上部で変更できます。</p>
+      <p><b>TAPE / WAV：</b>演奏を録音する／ループを書き出す。</p>
     </div>
   </details>
-  <script src="audio.js?v=0.1.8" defer></script>
-  <script src="icons.js?v=0.1.8" defer></script>
-  <script src="app.js?v=0.1.8" defer></script>
+  <script src="audio.js?v=0.1.8.1" defer></script>
+  <script src="icons.js?v=0.1.8.1" defer></script>
+  <script src="app.js?v=0.1.8.1" defer></script>
 </body>
 </html>
