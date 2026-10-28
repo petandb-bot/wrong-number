@@ -1,26 +1,17 @@
-## v0.1.3 — SUGAR POISON (UI only)
-- Replaced the gentle pastel shell with a saturated plastic pink / acid-green / violet / cyan toy-hardware theme.
-- Replaced the LCD waveform / pattern bars with a continuously animated, pixel-dot dancing bunny; rare blinking and mutation-triggered temporary corruption.
-- Added tiny decorative icons to each existing pad, without changing pad mapping or audio.
-- English MANUAL remains unchanged. Updated PWA icons and service-worker cache name to guarantee a fresh theme load.
-- Existing audio.js and sample.js remain byte-for-byte identical to v0.1.2.
-- New isolated `toxic.css` visual layer, immediately revertible by removing its stylesheet link.
+# v0.1.5 — LITTLE ACCIDENTS
 
-# Changelog
+- Rebuilt UI as a compact, candy-toxic, 16-pad retro instrument with minimal one-line title and reduced decorative copy.
+- LCD now prioritizes kit, mode (READY / LOOPING / MUTATING / SAVED / TAPE REC), message and BPM/bar position.
+- Replaced waveform/large bunny with three tiny Game & Watch-style pixel rabbits with alternating dance frames, blinks and mutate glitches.
+- Replaced mixed unicode/emoji motifs with 16 original, visually consistent hand-drawn SVG sticker icons.
+- Removed unstable MIC, FILE, SAMPLE toggle and associated live/import code, without removing historical user-imported browser data.
+- Added four distinct internally synthesized kits: CANDY KIT (original v0.1.4 sounds), TOY MALFUNCTION, SUGAR POISON and GHOST OFFICE.
+- Added kit-aware groove generation and mutation; kit selection persists as part of the session/checkpoint.
+- Kept STOP / LOOP, TAPE, KEEP / RESTORE, NEW, tempo, live pads and both WAV outputs.
+- TAPE captures kit information per note, so a mid-take kit change is faithfully exported.
+- Preserved existing scene and checkpoint storage keys and interprets older scenes as CANDY KIT.
+- Implemented CSS compact mode and safe-area padding for mobile home-screen use.
+- Bumped PWA cache to v0.1.5. Updated app icons to show the rabbit trio.
+- Manual and README are in English.
 
-## v0.1.2
-- New soft-hardware visual identity: pastel moulded shell and four complementary pad banks.
-- All in-app help/manual text in English.
-- MIC captures up to 12 seconds using the MediaRecorder API, stops all microphone tracks afterward.
-- FILE imports audio decoded locally by the browser (up to 25 MB, first 12 seconds used).
-- Onset-biased slicing and per-pad filtering / playback rate / reverse variations across 16 pads.
-- SOUND BANK switch: keeps the original SYNTH instrument intact; SAMPLE is an optional layer.
-- SAMPLE-compatible loop playback, mutation, TAPE, and two-bar WAV rendering.
-- Sample bank cached locally in IndexedDB when available; clear control inside MANUAL.
-- Cache version bumped; PWA icons recolored to match the enclosure.
-- Regression tests and simulated microphone API test.
-
-## v0.1.1
-- Added TAPE performance-to-WAV rendering (30-second maximum).
-- Added RESTORE long-press undo stack (8 states).
-- Existing synthesized timbres unchanged.
+Validation: Chromium browser functional regression, WAV checks, 4x16-voice offline output levels, and 320×568 / 375×667 / 390×740 / 430×800 screenshots. iPhone Safari not hardware-tested.

@@ -2,75 +2,79 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
-  <meta name="theme-color" content="#fd3d97">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+  <meta name="theme-color" content="#f63c9c">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="WRONG NUMBER">
-  <meta name="description" content="A candy-colored instrument with something slightly wrong inside.">
+  <meta name="description" content="A tiny haunted candy-colored pocket instrument with four sound kits and three dancing pixel rabbits.">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="apple-touch-icon" href="assets/icon-180.png">
   <link rel="icon" href="assets/icon-192.png">
   <link rel="stylesheet" href="style.css">
-  <link rel="stylesheet" href="toxic.css">
-  <title>WRONG NUMBER — pocket instrument</title>
+  <title>WRONG NUMBER — Little Accidents</title>
 </head>
 <body>
-  <main class="shell" aria-label="WRONG NUMBER instrument">
-    <header class="shell-header">
-      <div class="header-kicker"><span class="edition-tag">TOY / 013</span><span class="header-slogan">SWEET NOISE · BAD LUCK</span><span class="power-led" aria-hidden="true"></span></div>
-      <div class="header-brand"><span class="brand-word">WRONG<br>NUMBER<span class="brand-mark">®</span></span><span class="brand-mascot" aria-hidden="true">☠<span>!?</span></span></div>
-      <div class="header-sub"><span>THE TINY MALFUNCTION MACHINE</span><span>★ 16 LITTLE ACCIDENTS ★</span></div>
+  <main class="shell" aria-label="WRONG NUMBER pocket instrument">
+    <header class="header">
+      <div class="brand"><span class="brand-spark" aria-hidden="true">✳</span> WRONG NUMBER <span class="brand-sticker" aria-hidden="true">♡!</span></div>
+      <div class="brand-meta"><span>little accidents / no. 015</span><span class="power-led" aria-hidden="true"></span></div>
     </header>
-    <section class="screen-panel" aria-label="Display">
+
+    <section class="lcd-case" aria-label="Instrument status display">
       <div class="lcd">
-        <div class="lcd-top"><span>WRONG NUMBER</span><span id="lcd-mode">AWAKE?</span></div>
-        <div class="display-view" id="display-view" aria-label="Animated dancing pixel bunny, reflecting musical activity"><canvas id="display-fallback" width="320" height="128"></canvas><div id="p5-container"></div></div>
-        <div class="lcd-bottom"><span id="status-text">TOUCH ANY KEY TO START</span><span id="beat-readout">--:--</span></div>
+        <div class="lcd-top"><span id="lcd-kit">01 / CANDY KIT</span><span id="lcd-mode">READY</span></div>
+        <div class="display-view" id="display-view" aria-label="Three pixel rabbits dancing to the musical state">
+          <canvas id="display-fallback" width="320" height="100"></canvas>
+          <div id="p5-container" aria-hidden="true"></div>
+        </div>
+        <div class="lcd-bottom"><span id="status-text" aria-live="polite">TAP TO PLAY</span><span id="beat-readout">100 BPM · 1:01</span></div>
       </div>
+      <div class="lcd-label" aria-hidden="true"><span>♡ DIGITAL PETS / BAD HABITS</span><span>3 LITTLE TROUBLEMAKERS ✳</span></div>
     </section>
-    <div class="screen-stickers" aria-hidden="true"><span class="screen-sticker-left">☺  SUGAR RUSH / ERROR 09</span><span class="screen-sticker-right">DO NOT TRUST THE BUNNY  ☣</span></div>
-    <div class="transport-head"><span>MEMORY / TWO BARS</span><div class="tempo"><button id="tempo-down" aria-label="Decrease tempo">−</button><span id="tempo-value" aria-label="Tempo">092 <small>BPM</small></span><button id="tempo-up" aria-label="Increase tempo">+</button></div></div>
-    <section class="input-strip" aria-label="Sound source">
-      <div class="source-wrap"><span class="source-label">SOUND BANK</span><button id="btn-source" class="source-button" aria-pressed="false" title="Switch between synthesizer and recorded sounds">SYNTH <span class="source-dot">●</span></button></div>
-      <div class="input-controls"><button id="btn-mic" class="input-button" aria-pressed="false">● MIC</button><button id="btn-file" class="input-button">↑ FILE</button></div>
-      <input type="file" id="file-picker" accept="audio/*,.wav,.mp3,.m4a,.aac,.ogg,.flac" hidden aria-label="Choose an audio file">
+
+    <section class="toolbar" aria-label="Sound kit and tempo">
+      <div class="kit-control"><span class="tiny-label">SOUND KIT</span><div class="kit-buttons"><button id="kit-prev" class="kit-arrow" type="button" aria-label="Previous kit">‹</button><button id="btn-source" class="kit-name" type="button" aria-label="Next sound kit">CANDY KIT</button><button id="kit-next" class="kit-arrow" type="button" aria-label="Next kit">›</button></div></div>
+      <div class="tempo-control"><span class="tiny-label">TEMPO</span><div class="tempo-buttons"><button id="tempo-down" aria-label="Decrease tempo">−</button><span id="tempo-value">092 <small>BPM</small></span><button id="tempo-up" aria-label="Increase tempo">+</button></div></div>
     </section>
+
     <section id="pads" class="pads" aria-label="16 sound pads"></section>
-    <div class="pad-subhead" aria-hidden="true"><span>♥ SOUND BITES BACK</span><span>✖ BREAK YOUR ROUTINE</span></div>
+
     <section class="command-row" aria-label="Loop controls">
       <button id="btn-loop" class="command command-loop" aria-pressed="false"><strong>LOOP</strong><small>CAPTURE / STOP</small></button>
       <button id="btn-mutate" class="command command-mutate"><strong>MUTATE</strong><small>EVOLVE</small></button>
       <button id="btn-keep" class="command command-keep"><strong>KEEP</strong><small>SNAPSHOT</small></button>
     </section>
-    <div class="bottom-strip">
-      <div class="bottom-left"><button id="btn-restore" class="utility" title="Hold to undo the last MUTATE or NEW">↶ RESTORE</button><button id="btn-tape" class="utility utility-tape" aria-pressed="false" title="Tap to record or stop a performance (max 30 sec)">● TAPE</button></div>
-      <div class="bottom-right"><button id="btn-new" class="utility">✳ NEW</button><button id="btn-export" class="utility utility-export">⬇ MAKE WAV</button></div>
-    </div>
+    <section class="bottom-strip" aria-label="Recording and pattern tools">
+      <button id="btn-restore" class="utility utility-restore" title="Hold to undo the last mutation">↶ RESTORE</button>
+      <button id="btn-tape" class="utility utility-tape" aria-pressed="false" title="Record up to 30 seconds of live performance">● TAPE</button>
+      <button id="btn-new" class="utility utility-new" title="Make a fresh groove">✳ NEW</button>
+      <button id="btn-export" class="utility utility-export" title="Export two-bar loop">↓ WAV</button>
+    </section>
+
     <div id="export-panel" class="export-panel" hidden>
-      <span id="export-status">PREPARING AUDIO...</span>
-      <a id="download-link" href="#" download="wrong-number-loop.wav" hidden>DOWNLOAD WAV ↗</a>
+      <button id="btn-close-export" class="export-close" aria-label="Close export panel">×</button>
+      <span id="export-status">PREPARING AUDIO…</span>
+      <a id="download-link" href="#" download="wrong-number-loop.wav" hidden>DOWNLOAD WAV</a>
       <button id="btn-share" hidden>SHARE / SAVE TO FILES</button>
     </div>
-    <div class="footer-line"><span id="live-message">SYNTH / READY</span><span>v0.1.3 <span aria-hidden="true">☣</span></span></div>
-    <div class="underprint" aria-hidden="true">CUTE ENOUGH TO BITE <span>★</span> MADE OF MISTAKES <span>★</span> PLAY AT YOUR OWN RISK</div>
+    <footer class="footer-line"><span id="live-message">CANDY KIT / READY</span><span>v0.1.5 ✳</span></footer>
   </main>
   <details class="help">
     <summary>MANUAL / HOW TO PLAY</summary>
     <div class="help-content">
-      <p><b>PLAY:</b> Tap any of the 16 pads for a sound. Tap quickly to change the attack. Press and hold for rapid fragments. Multiple fingers work at once.</p>
-      <p><b>SOUND BANK:</b> SYNTH uses the original 16 synthesized voices. SAMPLE uses 16 automatically chopped variations of your recording or imported audio. Tap the SOUND BANK button to switch. Your original SYNTH kit remains untouched.</p>
-      <p><b>MIC:</b> Tap once to start recording, then tap again to stop. Recording stops automatically after 12 seconds. Grant microphone permission when asked. Headphones are recommended to prevent feedback. Microphone recording requires HTTPS or localhost.</p>
-      <p><b>FILE:</b> Import an audio recording from your device (WAV, MP3, M4A, or another format supported by your browser). The first 12 seconds are analyzed and arranged across the 16 pads. Files remain on your device. To remove an imported bank, use <button id="btn-clear-bank" class="clear-bank" type="button">CLEAR SAMPLE BANK</button>.</p>
-      <p><b>LOOP:</b> Capture recent playing into a two-bar loop. If nothing has been played, a groove is generated. Tap again to stop. New pad hits are added to the loop on the following pass.</p>
-      <p><b>MUTATE:</b> Rearrange and transform the current pattern. Hold for a stronger mutation. <b>KEEP:</b> Save a checkpoint. <b>RESTORE:</b> Return to that checkpoint. Hold RESTORE to undo the latest MUTATE/NEW (up to 8 steps).</p>
-      <p><b>TAPE:</b> Record your live performance and loop together, for up to 30 seconds. Tap again to render a WAV with a reverb tail. <b>MAKE WAV:</b> Export a seamless two-bar loop as 44.1 kHz, 16-bit stereo PCM. Both exports include SAMPLE sounds when that bank is selected.</p>
-      <p><b>NEW:</b> Generate a new groove. <b>− / +:</b> Change tempo. Keyboard: <kbd>1 2 3 4 / Q W E R / A S D F / Z X C V</kbd>.</p>
-      <p>Imported audio is stored locally in this browser when storage is available; it is not uploaded to GitHub. Browser storage can be cleared by the system. Save your original files separately. On iPhone, keep the app open while recording or exporting. Start at a moderate volume.</p>
+      <p><b>PADS:</b> Tap any of the 16 colorful pads to make a sound. Tap rapidly for a different attack. Hold a pad to generate quick fragments. Multiple fingers can play together.</p>
+      <p><b>SOUND KIT:</b> Use the arrows or tap the kit name to switch between CANDY KIT, TOY MALFUNCTION, SUGAR POISON and GHOST OFFICE. The current loop keeps playing; its sounds change immediately on the next notes.</p>
+      <p><b>LOOP:</b> Capture what you just played into a two-bar pattern, or generate a beat if the memory is empty. Tap LOOP again to stop. Live pad hits are added to the loop on the next pass.</p>
+      <p><b>MUTATE:</b> Evolve the existing pattern with kit-aware changes. Press and hold MUTATE for a stronger transformation.</p>
+      <p><b>KEEP:</b> Save the current pattern and kit as a snapshot. <b>RESTORE:</b> Recall it. Hold RESTORE to step backward through up to eight previous MUTATE/NEW states.</p>
+      <p><b>TAPE:</b> Record your playing and the live loop for up to 30 seconds, then save a WAV with a natural tail. <b>WAV:</b> Export an exact two-bar seamless loop as 44.1 kHz, 16-bit stereo PCM.</p>
+      <p><b>NEW:</b> Generate a new beat using the current kit's rhythmic personality. <b>− / +:</b> Adjust tempo. Desktop keyboard: <kbd>1 2 3 4 / Q W E R / A S D F / Z X C V</kbd>.</p>
+      <p><b>NOTE:</b> MIC and FILE have been removed in this version to avoid unstable recording behavior on mobile browsers. Your old patterns still load; previous imported sample banks are not used or erased by this app. All sound is generated locally. Start at a comfortable listening volume.</p>
     </div>
   </details>
   <script src="audio.js" defer></script>
-  <script src="sample.js" defer></script>
+  <script src="icons.js" defer></script>
   <script src="app.js" defer></script>
 </body>
 </html>

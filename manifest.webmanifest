@@ -1,15 +1,15 @@
 {
-  "name": "WRONG NUMBER — Pocket Instrument",
-  "short_name": "WRONG NUMBER",
-  "description": "A small instrument that remembers your mistakes.",
-  "lang": "en",
-  "start_url": "./",
-  "scope": "./",
-  "display": "standalone",
-  "background_color": "#21112e",
-  "theme_color": "#fc4a98",
-  "icons": [
-    {"src": "assets/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable"},
-    {"src": "assets/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"}
+  "name":"WRONG NUMBER — LITTLE ACCIDENTS",
+  "short_name":"WRONG NUMBER",
+  "description":"A candy-colored pocket instrument with four synthesized sound kits.",
+  "lang":"en",
+  "start_url":"./",
+  "scope":"./",
+  "display":"standalone",
+  "background_color":"#301036",
+  "theme_color":"#f63c9c",
+  "icons":[
+    {"src":"assets/icon-192.png","sizes":"192x192","type":"image/png","purpose":"any maskable"},
+    {"src":"assets/icon-512.png","sizes":"512x512","type":"image/png","purpose":"any maskable"}
   ]
 }

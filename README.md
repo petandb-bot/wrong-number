@@ -1,78 +1,51 @@
-# WRONG NUMBER v0.1.3 — SUGAR POISON
+# WRONG NUMBER v0.1.5 — LITTLE ACCIDENTS
 
-Version 0.1.3 is a **UI-only redesign** over v0.1.2. The visual reference is a loud, candy-colored 1990s portable electronic toy with a small toxic / unsettling undertone. The 16 original synth voices, microphone and file input, sound-bank switching, loop engine, mutation behavior, TAPE recording, session storage, and WAV export are unchanged.
+A tiny, candy-colored, slightly haunted pocket instrument. Four independent synth kits, 16 pads, loop memory, mutation, live TAPE recording, and downloadable WAV. No server, account, microphone, audio upload, or sound samples needed.
 
-## What's changed
+## Publish to GitHub Pages
 
-- Candy-pink glossy shell, hot-pink controls, acid-green LCD and shadows in deep ultraviolet. The pad colors now alternate individually instead of being grouped in monochromatic rows.
-- All 16 pads keep their original sound mapping and names. Small icons are visual decorations only.
-- The LCD no longer shows waveform or audio spectrum. A dot-matrix dancing bunny reacts to loop and pad activity and has occasional blink / off-kilter expression. After a MUTATE, its face briefly glitches. No waveform is drawn.
-- Button placement and interaction remain as before; English-language MANUAL is preserved. The new theme is isolated in `toxic.css`, loaded after the existing `style.css`.
-- Updated app icons and PWA cache namespace.
+1. Create or open your GitHub repository.
+2. Extract the supplied ZIP and upload the **contents of `wrong-number-v0.1.5`** to the repository root, replacing previous files. Do not upload the containing folder as a folder unless Pages is configured accordingly.
+3. In GitHub **Settings → Pages**, select **Deploy from a branch → main → /(root)**.
+4. Open the published HTTPS address in Safari. From the Share menu, select **Add to Home Screen**.
+5. For updates, replace `index.html`, `style.css`, `audio.js`, `icons.js`, `app.js`, `sw.js`, `manifest.webmanifest`, and `assets/` together. The old `sample.js` and `toxic.css` may remain in the repository but are not loaded by v0.1.5; remove these unused files to keep the repository clean.
 
-## Replace on GitHub Pages
+## How to play
 
-Unzip and upload **all** files from the ZIP to the existing repository root. New file: `toxic.css`. Existing files that also need updating: `index.html`, `app.js`, `sw.js`, `manifest.webmanifest`, and `assets/`. In Safari, refresh the Pages URL once, or close and relaunch the installed home-screen app. Cached versions can persist temporarily.
+- Tap / hold the 16 colored pads; different taps produce varied attacks and short repeated fragments.
+- Switch SOUND KIT with the arrows or by tapping the kit name: CANDY KIT, TOY MALFUNCTION, SUGAR POISON, GHOST OFFICE. Switching kits does not erase the current pattern.
+- LOOP captures a recent gesture or generates two bars. Tap again to stop.
+- MUTATE makes a kit-dependent modification of the current groove. Hold for a stronger mutation.
+- KEEP stores the groove and kit. RESTORE recalls it, and long-press RESTORE undoes up to eight mutations.
+- NEW generates a fresh groove without changing the selected kit or BPM.
+- TAPE records the current live performance for up to 30 seconds, plus an additional release tail.
+- WAV creates a seamless, two-bar 44.1 kHz / 16-bit / stereo file. On iPhone, use the download or share link to save to Files.
+- Desktop keyboard: 1-4, QWER, ASDF, ZXCV.
 
-## Tests and limits
+## Sound design
 
-Chromium automated tests exercise pads, LOOP, MUTATE / restore, TAPE, microphone mock recording, SAMPLE import, and stereo WAV rendering. Visual smoke screenshots include 320px, 390px, and 430px widths. **Real iPhone Safari/PWA microphone and audio tests have not been performed.** Network access to the optional p5.js CDN is not required for the animation because Canvas2D is the fallback.
+CANDY KIT preserves the original synthesis recipes from v0.1.4. TOY MALFUNCTION uses elastic FM impacts, short digital bleeps and geometric microfragments. SUGAR POISON uses glassy inharmonic tones and cold residue. GHOST OFFICE uses subdued motor-like lows, dry clicks and hollow, floating tones. All four kits have different 16-pad synthesis paths while preserving the four sound roles: BODY (01–04), HIT (05–08), WEIRD (09–12), and AIR / TAIL (13–16).
 
----
+Each kit also has a distinct groove density and mutation range; the core timing/loop engine remains compatible with older scene data. Instruments are synthesized with the Web Audio API; no audio files are fetched. p5.js 1.11.13 is used only for the screen when available, and the Canvas fallback is fully usable offline.
 
-# WRONG NUMBER v0.1.2 — SOFT HARDWARE
+## Upgrade / compatibility
 
-**A small instrument that remembers your mistakes.**
+The existing session and KEEP localStorage keys are retained. A missing `kit` field in older sessions defaults to CANDY KIT, preserving the existing sound. Imported SAMPLE data from v0.1.4 is not accessed or deleted. MIC, FILE and SAMPLE input have been deliberately removed from the UI and playback path due to observed instability on iPhone.
 
-p5.js 1.11.13（画面）と Web Audio API（音響）で動作する16パッドのポケット楽器。GitHub Pagesに置いて、iPhone Safariの「ホーム画面に追加」から利用することを想定しています。操作画面内の **MANUAL / HOW TO PLAY はすべて英語**です。
+The service worker uses network-first update behavior for same-origin assets and a fresh v0.1.5 cache name. If the prior home-screen app is stuck on an older interface, reload in Safari, then fully close/reopen the home-screen app, or remove/re-add the home-screen shortcut after updating.
 
-## v0.1.2 の変更点
+## Tested and untested
 
-- **筐体デザイン**：クリーム／ピンクのモールド筐体、ラベンダーの液晶ベゼル、4色パッド。配置・基本の操作方法は以前と同じです。
-- **SOUND BANK**：SYNTH（従来の16音色）と SAMPLE（録音・取り込み音を自動分割した16音色）の切替。初期状態はSYNTHです。
-- **● MIC**：マイク録音の開始／停止。最大12秒で自動終了、音声を自動解析して16個のパッドに割り当てます。マイクの許可が必要です。録音中のマイクトラックは停止時に閉じます。
-- **↑ FILE**：端末の音声ファイルを読み込んで同じ16パッドへ展開。対応形式はそのブラウザの `decodeAudioData()` 実装によります（WAV/MP3/M4Aなど）。最大25MB、最初の12秒を使用します。
-- **変異・書き出し**：SAMPLEモードでもLOOP / MUTATE / KEEP / RESTORE / TAPE / MAKE WAVを利用できます。SYNTHパッドと元の音響エンジン（`audio.js`）は変更していません。
-- **端末内保存**：サンプルバンクはIndexedDBへ保存を試みます。アクセス不能ならそのセッション内に限って利用できます。アップロード／サーバー送信は行いません。ブラウザのサイトデータ削除で消える場合があります。
-- `sw.js` のキャッシュ名を `wrong-number-v0.1.2` に変更しました。上書き配置でも新しい画面とコードが取得されます。
+Chromium headless browser tests cover 16 pad clicks, four kit switching, LOOP, MUTATE, KEEP / RESTORE, stereo WAV export, TAPE (including kit switches mid-recording), the 64 synth voices' output levels, and screenshot fit on multiple mobile viewport sizes. **Real iPhone Safari / Home Screen, audio routing, and touch latency were not hardware tested.** The layout may be affected by Safari chrome and display text scaling. At extremely small viewports, vertical scrolling may be preferable to shrinking pads below a comfortable touch target.
 
-## ファイル構成
+## Files
 
-- `index.html` — UI・英語MANUAL
-- `style.css` — パステル筐体デザイン
-- `app.js` — 演奏／シーケンサー／録音・ファイル取り込み／書き出し
-- `audio.js` — 従来のSYNTH音響エンジン（v0.1.1から無変更）
-- `sample.js` — NEW: 自動16スライス、SAMPLE再生と端末内保存
-- `manifest.webmanifest`, `sw.js`, `assets/` — PWA
-- `tests/smoke.py` — 従来機能 + ファイル取り込みとSAMPLE書き出し
-- `tests/mic_mock.py` — モックの録音APIを使った開始・停止・取り込み処理テスト
+- `index.html`: controls, compact console and English manual
+- `style.css`: colorful mechanical UI and responsive layout
+- `audio.js`: Web Audio synthesis and offline PCM WAV encoder
+- `icons.js`: 16 original, stylistically unified vector icons
+- `app.js`: loop scheduler, kit management, persistence, animation, export
+- `manifest.webmanifest`, `sw.js`, `assets/`: PWA support
+- `tests/`: scripts for smoke, regression, audio, and icon checks
 
-## 操作
-
-1. **SYNTH**のままパッドを叩くと、従来どおり16種類の合成音を演奏できます。素早い連打・長押しも従来どおりです。
-2. **MIC**でマイクを録音（タップ開始／再タップ停止、最大12秒）。**FILE**で端末の音声を読み込むこともできます。読み込みが完了すると自動で**SAMPLE**に切り替わります。
-3. **SOUND BANK**をタップすると、SYNTH / SAMPLE を切り替えられます。1つのサンプル素材から16種類の断片／ピッチ／フィルター／逆再生バリエーションを構成します。GUIに波形編集や複雑なパラメータを追加していません。
-4. **LOOP**は直前のパッド演奏から2小節ループを生成します。**MUTATE**はそのパターンを変異。長押しで強い変異。**KEEP**はスナップショット、**RESTORE**の短押しはKEEPへ戻す、長押しは直前の変異の取消です。
-5. **TAPE**は最大30秒の演奏をWAVとして書き出します。**MAKE WAV**は2小節のシームレスループを書き出します。どちらも44.1kHz / 16-bit PCM / stereoです。
-6. MANUALの **CLEAR SAMPLE BANK** は保存済みバンクを削除してSYNTHに戻します。元のSYNTH音色・パターンは削除しません。
-
-**音声録音の注意**：HTTPS上、またはlocalhostのようなセキュアコンテキストで開く必要があります。iPhoneのSafari／PWAのマイク権限・M4Aデコード・録音中の画面遷移・バックグラウンド制約は端末実機で確認してください。ヘッドフォンでハウリングを避け、音量を抑えて開始してください。サンプルとシーケンスの保存は別です（SYNTH/SAMPLE切替は全パターン共通）。
-
-## GitHub Pagesへの配置
-
-1. ZIPを展開し、**中のファイル・フォルダ全体**を既存リポジトリのルートへアップロードします。`index.html`・`audio.js`・`sample.js`・`app.js`・`style.css`・`sw.js`・`manifest.webmanifest`・`assets/` がリポジトリ直下に必要です。
-2. GitHubの `Settings → Pages` で `Deploy from a branch`、`main`、`/(root)` を設定します。既存のPages設定があれば変更不要です。
-3. iPhone Safariで公開URLを開き、「共有」→「ホーム画面に追加」で登録します。
-4. 旧画面が残る場合はSafariのページを再読み込みしてください。旧Service Workerキャッシュは更新時に削除する実装です。
-
-### ローカル確認
-
-プロジェクトのフォルダで `python -m http.server 8000` を実行し、`http://localhost:8000` へアクセスします。自分のPCのIPアドレスで開いた `http://192.168...:8000` は一般にセキュアコンテキスト扱いとならず、マイクが使えないことがあります。
-
-## 実装・テスト上の区別
-
-- `tests/smoke.py`: Chromium（Playwright）で従来のパッド／MUTATE／KEEP／LOOP／TAPEとファイル取り込み／SAMPLE音声書き出しをテスト。
-- `tests/mic_mock.py`: MediaRecorderとマイク許可APIをモックして録音開始・停止・サンプル化処理をテスト。**実機の録音テストではありません**。
-- iPhone Safariおよびホーム画面PWAでの実機検証はまだ行っていません。
-- 大きな音声ファイルのデコードはブラウザで処理するため、古いiPhoneではメモリ不足が起きる可能性があります。12秒程度までの短いファイルを推奨します。
-- `audio.js` 内の既存の16合成音源／効果音処理に変更はありません。
+No build tooling or backend required. Open the app over HTTPS. For development, use a local web server rather than opening `index.html` as a file.

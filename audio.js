@@ -111,6 +111,103 @@ function audioBufferToWav(buffer,startFrame,endFrame){
  for(let i=startFrame;i<endFrame;i++){let l=clamp(left[i]*gain,-1,1),r=clamp(right[i]*gain,-1,1);view.setInt16(pos,l<0?l*32768:l*32767,true);pos+=2;view.setInt16(pos,r<0?r*32768:r*32767,true);pos+=2;}
  return new Blob([ab],{type:'audio/wav'});
 }
+/* Three additional synthesized instruments. All voices use the same graph and
+   offline render paths; nothing is streamed, sampled or downloaded. */
+const KIT_TITLES=['CANDY KIT','TOY MALFUNCTION','SUGAR POISON','GHOST OFFICE'];
+const KIT_SHORT=['CANDY','TOY','SUGAR','GHOST'];
+function scheduleKitVoice(g,pad,time,params={}){
+ const kit=clamp(Math.floor(Number(params.kit)||0),0,3);
+ if(kit===0)return scheduleVoice(g,pad,time,params); // Preserve v0.1.4's proven synth voice.
+ const id=pad|0,t=Math.max(.001,time),r=rng(((params.seed||1)^Math.imul((id+23),(kit+1)*0x9e3779b1))>>>0);
+ const rand=()=>r(),color=params.color||{},hold=!!params.hold,fire=!!params.fire;
+ const broken=clamp(color.broken??.24,0,1),space=clamp(color.space??.26,0,1);
+ const trans=clamp((color.shift||0)*1.7+(fire?rand()-.5:0)*4,-7,7);
+ const p=Math.pow(2,trans/12),vol=clamp(params.velocity??.85,.18,1.1)*(hold?.70:1);
+ const v=bus(g,t,vol*(kit===3?.82:.73),kit===2?.24+space*.25:kit===3?.20+space*.19:.07+space*.13,kit===1?.035:kit===2?.14:.08);
+ const osc=(f,d,a,kind='sine',to=f,offset=0)=>oscillator(g,v,t+offset,{f:f*p,endF:to*p,d,a,type:kind,attack:kind==='sawtooth'?.002:.004});
+ const hit=(d,a,hp=2400,offset=0)=>noise(g,v,t,{d,a,hp,offset:rand()*.87+offset});
+ const band=(d,a,f,q=.8)=>noise(g,v,t,{d,a,bp:f,q,offset:rand()*.81});
+ const mod=(f,m,index,d,a,drop=1,offset=0)=>fm(g,v,t+offset,{f:f*p,m,index,d,a,drop});
+ const f=(factor=1)=>factor*(1+(rand()-.5)*(.02+broken*.035));
+ if(kit===1){ // TOY MALFUNCTION — elastic circuits, intentionally awkward intervals
+  if(id<4){
+   if(id===0){mod(111,2.5,185,.28,.43,.39);osc(66,.29,.17,'triangle',44);hit(.012,.085,5100);}
+   if(id===1){osc(92,.42,.32,'square',49);osc(46,.40,.18,'sine',40);}
+   if(id===2){mod(154,4.7,185,.27,.35,.48);osc(61,.35,.11);}
+   if(id===3){osc(204,.14,.15,'square',63);mod(98,2.9,270,.31,.31,.62);}
+  }else if(id<8){
+   const ix=id-4;
+   if(ix===0){hit(.022,.24,6100);osc(1530,.025,.13,'square',640);}
+   if(ix===1){mod(450,1.2,78,.09,.31,.62);hit(.025,.07,3900);}
+   if(ix===2){[550,884,1340].forEach((n,i)=>osc(n,.065+i*.033,.10-i*.015,'square',n*.76));}
+   if(ix===3){band(.11,.29,1650,2);osc(250,.09,.16,'triangle',110);}
+  }else if(id<12){
+   const n=id-8;
+   if(n===0){mod(240,2.4,155,.27,.30,.8);osc(123,.13,.10,'sawtooth',115);}
+   if(n===1){[395,596,987].forEach((q,i)=>osc(q,.25+i*.08,.1,'triangle',q*f(.97),i*.009));}
+   if(n===2){for(let i=0;i<4;i++)osc(280+rand()*1600,.022,.15,'square',160+rand()*600,i*.035);}
+   if(n===3){for(let i=0;i<6;i++)mod(260+i*92,1.8,110,.036,.092,.5,i*.028);}
+  }else{
+   const n=id-12;
+   if(n===0){band(.43,.23,680,1.2);osc(410,.29,.09,'triangle',230,.17);}
+   if(n===1){mod(275,1.3,90,.61,.17,.78);osc(184,.48,.09,'triangle',170);}
+   if(n===2){band(.54,.18,1900,.46);mod(640,1.9,27,.37,.11,1);}
+   if(n===3){[147,220,294].forEach((q,i)=>osc(q,.60+i*.1,.077,'square',q*f(.99),i*.022));}
+  }
+ }else if(kit===2){ // SUGAR POISON — cold, fragile, smeared aftertaste
+  if(id<4){
+   if(id===0){osc(127,.49,.46,'sine',42);osc(78,.38,.20,'triangle',48);hit(.013,.09,4700);}
+   if(id===1){mod(72,1.8,63,.74,.35,.61);osc(51,.64,.15);}
+   if(id===2){osc(98,.44,.30,'sawtooth',71);mod(106,1.4,110,.35,.13,.72);}
+   if(id===3){mod(135,3.9,200,.48,.30,.59);osc(53,.34,.14);}
+  }else if(id<8){
+   const n=id-4;
+   if(n===0){band(.061,.30,3900,1.9);osc(2670,.025,.07);}
+   if(n===1){[437,711].forEach((q,i)=>osc(q,.20+i*.05,.17,'sine',q*f(.99)));}
+   if(n===2){[631,987,1633].forEach((q,i)=>osc(q,.3+i*.07,.12/(1+i*.42)));}
+   if(n===3){band(.22,.28,3050,1);osc(206,.085,.11,'sine',139);}
+  }else if(id<12){
+   const n=id-8;
+   if(n===0){mod(174,2.17,160,.37,.22,.9);osc(346,.18,.12,'sawtooth',230);}
+   if(n===1){[785,1190,1890].forEach((q,i)=>osc(q,.48+i*.12,.13/(1+i*.55),'sine',q*f(.99)));}
+   if(n===2){for(let i=0;i<6;i++)osc(500+rand()*1900,.018+rand()*.028,.072,'triangle',200+rand()*700,i*.044);}
+   if(n===3){band(.17,.21,1200,2);for(let i=0;i<4;i++)osc(830+i*173,.035,.07,'sine',260+i*41,i*.032);}
+  }else{
+   const n=id-12;
+   if(n===0){band(.46,.18,1800,.5);osc(420,.22,.13,'sine',180,.21);}
+   if(n===1){mod(268,1.34,78,.91,.20,.94);osc(397,.52,.072);}
+   if(n===2){band(.76,.18,1100,.42);osc(295,.39,.075,'triangle',232,.1);}
+   if(n===3){[164,247,369,515].forEach((q,i)=>osc(q,.84+i*.09,.074/(1+i*.25),'sine',q*f(.97),i*.029));}
+  }
+ }else{ // GHOST OFFICE — muted machine room, hollow rhythm, distant signals
+  if(id<4){
+   if(id===0){osc(105,.50,.51,'sine',45);osc(53,.26,.17,'triangle',44);hit(.017,.07,2500);}
+   if(id===1){osc(67,.67,.30,'sine',43);band(.15,.06,230,.7);}
+   if(id===2){mod(92,1.63,85,.35,.24,.78);osc(46,.42,.23,'sine',44);}
+   if(id===3){osc(152,.15,.14,'triangle',52);mod(78,2.8,170,.50,.27,.62);}
+  }else if(id<8){
+   const n=id-4;
+   if(n===0){hit(.028,.13,4500);osc(1010,.019,.08,'sine',610);}
+   if(n===1){band(.10,.20,710,3.2);osc(325,.061,.13,'triangle',300);}
+   if(n===2){[385,553,849].forEach((q,i)=>osc(q,.11+i*.04,.10-i*.02,'sine',q*f(.97)));}
+   if(n===3){band(.19,.20,1640,1.15);osc(151,.10,.12,'sine',104);}
+  }else if(id<12){
+   const n=id-8;
+   if(n===0){mod(123,2.27,75,.24,.19,.89);band(.045,.07,960,1.3);}
+   if(n===1){[532,812].forEach((q,i)=>osc(q,.49+i*.11,.11,'sine',q*f(.99)));}
+   if(n===2){for(let i=0;i<3;i++){hit(.014,.16,1300+i*1400);osc(239+i*143,.035,.07,'square',170+i*60,i*.082);}}
+   if(n===3){band(.24,.21,1050,1.1);osc(310,.07,.07,'triangle',110);}
+  }else{
+   const n=id-12;
+   if(n===0){band(.59,.22,540,.68);osc(324,.26,.06,'sine',175,.31);}
+   if(n===1){mod(208,1.18,87,.98,.18,.90);osc(106,.67,.075,'triangle',108);}
+   if(n===2){band(.82,.20,820,.43);osc(176,.47,.065,'sine',141,.22);}
+   if(n===3){[84,126,189,282].forEach((q,i)=>osc(q,.95+i*.08,.08,'sine',q*f(.985),i*.038));}
+  }
+ }
+ return v;
+}
+
 const KIT_NAMES=['PRESS','FALL','CORNER','BEND','TICK','WOOD','TIN','SNAP','VOWEL','GLASS','ERROR','CUT','REVERSE','HOLLOW','AIR','GHOST'];
-window.WrongAudio={graph,scheduleVoice,audioBufferToWav,rng,clamp,KIT_NAMES};
+window.WrongAudio={graph,scheduleVoice,scheduleKitVoice,audioBufferToWav,rng,clamp,KIT_NAMES,KIT_TITLES,KIT_SHORT};
 })();
