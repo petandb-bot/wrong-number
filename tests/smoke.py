@@ -1,4 +1,4 @@
-"""Smoke test for WRONG NUMBER v0.1.1
+"""Smoke test for WRONG NUMBER v0.1.2
 
 Requires: pip install playwright; playwright install chromium
 Optional: CHROMIUM_PATH=/usr/bin/chromium
@@ -11,6 +11,8 @@ import os
 import re
 import tempfile
 import wave
+import math
+import struct
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -32,6 +34,7 @@ with sync_playwright() as p:
     page.set_content(html, wait_until='domcontentloaded')
     page.add_style_tag(path=str(ROOT / 'style.css'))
     page.add_script_tag(path=str(ROOT / 'audio.js'))
+    page.add_script_tag(path=str(ROOT / 'sample.js'))
     page.add_script_tag(path=str(ROOT / 'app.js'))
 
     assert page.locator('.pad').count() == 16
@@ -95,6 +98,45 @@ with sync_playwright() as p:
             assert any(b != 0 for b in frames[:32000]), 'tape begins silent'
             print(f'TAPE verified: {w.getnframes()} frames, stereo, 44.1 kHz, 16-bit PCM')
 
+    # Import an actual WAV and verify 16-pad SAMPLE mode.
+    with tempfile.TemporaryDirectory() as input_dir:
+        audio_file = Path(input_dir) / 'input.wav'
+        with wave.open(str(audio_file), 'wb') as wav:
+            wav.setnchannels(1);wav.setsampwidth(2);wav.setframerate(22050)
+            data = [int(12000 * math.sin(2*math.pi*(130 + (i//11025)*73)*i/22050)
+                    * (0.5 if i%11025 > 8000 else 1)) for i in range(22050*4)]
+            wav.writeframes(struct.pack('<'+'h'*len(data),*data))
+        page.locator('#file-picker').set_input_files(str(audio_file))
+        page.wait_for_function('WrongNumberDebug.bankInfo().loaded', timeout=30000)
+        assert page.evaluate('WrongNumberDebug.bankInfo().mode') == 'SAMPLE'
+        page.locator('.pad').nth(12).click()
+        page.locator('#btn-export').click()
+        page.wait_for_function("!document.getElementById('download-link').hidden", timeout=60000)
+        with page.expect_download() as download:
+            page.locator('#download-link').click()
+        sampled = Path(input_dir) / 'sampled.wav'
+        download.value.save_as(sampled)
+        with wave.open(str(sampled), 'rb') as wav:
+            assert (wav.getnchannels(), wav.getframerate(), wav.getsampwidth()) == (2,44100,2)
+            assert wav.getnframes()>100000
+            assert any(b!=0 for b in wav.readframes(40000)), 'sample rendering silent'
+        # Reversible source switch keeps the original SYNTH kit and pattern.
+        page.locator('#btn-source').click()
+        assert page.evaluate('WrongNumberDebug.bankInfo().mode') == 'SYNTH'
+        page.locator('#btn-source').click()
+        assert page.evaluate('WrongNumberDebug.bankInfo().mode') == 'SAMPLE'
+        page.locator('#btn-tape').click()
+        page.locator('.pad').nth(6).click()
+        page.wait_for_timeout(250)
+        page.locator('#btn-tape').click()
+        page.wait_for_function("!document.getElementById('download-link').hidden", timeout=60000)
+        with page.expect_download() as download:
+            page.locator('#download-link').click()
+        recorded = Path(input_dir) / 'sample_tape.wav'
+        download.value.save_as(recorded)
+        with wave.open(str(recorded), 'rb') as wav:
+            assert wav.getnframes()>2.5*44100
+            assert any(b!=0 for b in wav.readframes(30000)), 'sample tape silent'
     assert not errors, errors
-    print('PASS: original pads, loop, mutate, snapshot, restore, undo, tempo, loop WAV, TAPE WAV, no JS exceptions')
+    print('PASS: v0.1.1 regression + FILE sample import / synth switch / SAMPLE loop WAV + SAMPLE TAPE WAV / no exceptions')
     browser.close()

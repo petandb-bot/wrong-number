@@ -1,3 +1,11 @@
+## v0.1.3 — SUGAR POISON (UI only)
+- Replaced the gentle pastel shell with a saturated plastic pink / acid-green / violet / cyan toy-hardware theme.
+- Replaced the LCD waveform / pattern bars with a continuously animated, pixel-dot dancing bunny; rare blinking and mutation-triggered temporary corruption.
+- Added tiny decorative icons to each existing pad, without changing pad mapping or audio.
+- English MANUAL remains unchanged. Updated PWA icons and service-worker cache name to guarantee a fresh theme load.
+- Existing audio.js and sample.js remain byte-for-byte identical to v0.1.2.
+- New isolated `toxic.css` visual layer, immediately revertible by removing its stylesheet link.
+
 # Changelog
 
 ## v0.1.2

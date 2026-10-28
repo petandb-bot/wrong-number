@@ -1,3 +1,25 @@
+# WRONG NUMBER v0.1.3 — SUGAR POISON
+
+Version 0.1.3 is a **UI-only redesign** over v0.1.2. The visual reference is a loud, candy-colored 1990s portable electronic toy with a small toxic / unsettling undertone. The 16 original synth voices, microphone and file input, sound-bank switching, loop engine, mutation behavior, TAPE recording, session storage, and WAV export are unchanged.
+
+## What's changed
+
+- Candy-pink glossy shell, hot-pink controls, acid-green LCD and shadows in deep ultraviolet. The pad colors now alternate individually instead of being grouped in monochromatic rows.
+- All 16 pads keep their original sound mapping and names. Small icons are visual decorations only.
+- The LCD no longer shows waveform or audio spectrum. A dot-matrix dancing bunny reacts to loop and pad activity and has occasional blink / off-kilter expression. After a MUTATE, its face briefly glitches. No waveform is drawn.
+- Button placement and interaction remain as before; English-language MANUAL is preserved. The new theme is isolated in `toxic.css`, loaded after the existing `style.css`.
+- Updated app icons and PWA cache namespace.
+
+## Replace on GitHub Pages
+
+Unzip and upload **all** files from the ZIP to the existing repository root. New file: `toxic.css`. Existing files that also need updating: `index.html`, `app.js`, `sw.js`, `manifest.webmanifest`, and `assets/`. In Safari, refresh the Pages URL once, or close and relaunch the installed home-screen app. Cached versions can persist temporarily.
+
+## Tests and limits
+
+Chromium automated tests exercise pads, LOOP, MUTATE / restore, TAPE, microphone mock recording, SAMPLE import, and stereo WAV rendering. Visual smoke screenshots include 320px, 390px, and 430px widths. **Real iPhone Safari/PWA microphone and audio tests have not been performed.** Network access to the optional p5.js CDN is not required for the animation because Canvas2D is the fallback.
+
+---
+
 # WRONG NUMBER v0.1.2 — SOFT HARDWARE
 
 **A small instrument that remembers your mistakes.**

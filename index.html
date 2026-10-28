@@ -3,27 +3,33 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
-  <meta name="theme-color" content="#d8a8c4">
+  <meta name="theme-color" content="#fd3d97">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="WRONG NUMBER">
-  <meta name="description" content="A small instrument that remembers your mistakes.">
+  <meta name="description" content="A candy-colored instrument with something slightly wrong inside.">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="apple-touch-icon" href="assets/icon-180.png">
   <link rel="icon" href="assets/icon-192.png">
   <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="toxic.css">
   <title>WRONG NUMBER — pocket instrument</title>
 </head>
 <body>
   <main class="shell" aria-label="WRONG NUMBER instrument">
-    <div class="shell-topline"><span class="brand-badge">W/N</span><span>THE SMALL HAPPY ACCIDENT MACHINE</span><span class="power-led"></span></div>
+    <header class="shell-header">
+      <div class="header-kicker"><span class="edition-tag">TOY / 013</span><span class="header-slogan">SWEET NOISE · BAD LUCK</span><span class="power-led" aria-hidden="true"></span></div>
+      <div class="header-brand"><span class="brand-word">WRONG<br>NUMBER<span class="brand-mark">®</span></span><span class="brand-mascot" aria-hidden="true">☠<span>!?</span></span></div>
+      <div class="header-sub"><span>THE TINY MALFUNCTION MACHINE</span><span>★ 16 LITTLE ACCIDENTS ★</span></div>
+    </header>
     <section class="screen-panel" aria-label="Display">
       <div class="lcd">
         <div class="lcd-top"><span>WRONG NUMBER</span><span id="lcd-mode">AWAKE?</span></div>
-        <div class="display-view" id="display-view" aria-label="Audio visualization"><canvas id="display-fallback" width="320" height="128"></canvas><div id="p5-container"></div></div>
+        <div class="display-view" id="display-view" aria-label="Animated dancing pixel bunny, reflecting musical activity"><canvas id="display-fallback" width="320" height="128"></canvas><div id="p5-container"></div></div>
         <div class="lcd-bottom"><span id="status-text">TOUCH ANY KEY TO START</span><span id="beat-readout">--:--</span></div>
       </div>
     </section>
+    <div class="screen-stickers" aria-hidden="true"><span class="screen-sticker-left">☺  SUGAR RUSH / ERROR 09</span><span class="screen-sticker-right">DO NOT TRUST THE BUNNY  ☣</span></div>
     <div class="transport-head"><span>MEMORY / TWO BARS</span><div class="tempo"><button id="tempo-down" aria-label="Decrease tempo">−</button><span id="tempo-value" aria-label="Tempo">092 <small>BPM</small></span><button id="tempo-up" aria-label="Increase tempo">+</button></div></div>
     <section class="input-strip" aria-label="Sound source">
       <div class="source-wrap"><span class="source-label">SOUND BANK</span><button id="btn-source" class="source-button" aria-pressed="false" title="Switch between synthesizer and recorded sounds">SYNTH <span class="source-dot">●</span></button></div>
@@ -31,13 +37,14 @@
       <input type="file" id="file-picker" accept="audio/*,.wav,.mp3,.m4a,.aac,.ogg,.flac" hidden aria-label="Choose an audio file">
     </section>
     <section id="pads" class="pads" aria-label="16 sound pads"></section>
+    <div class="pad-subhead" aria-hidden="true"><span>♥ SOUND BITES BACK</span><span>✖ BREAK YOUR ROUTINE</span></div>
     <section class="command-row" aria-label="Loop controls">
       <button id="btn-loop" class="command command-loop" aria-pressed="false"><strong>LOOP</strong><small>CAPTURE / STOP</small></button>
       <button id="btn-mutate" class="command command-mutate"><strong>MUTATE</strong><small>EVOLVE</small></button>
       <button id="btn-keep" class="command command-keep"><strong>KEEP</strong><small>SNAPSHOT</small></button>
     </section>
     <div class="bottom-strip">
-      <div class="bottom-left"><button id="btn-restore" class="utility" title="長押しで直前のMUTATE/NEWを戻す">↶ RESTORE</button><button id="btn-tape" class="utility utility-tape" aria-pressed="false" title="タップで演奏を録音・停止（最大30秒）">● TAPE</button></div>
+      <div class="bottom-left"><button id="btn-restore" class="utility" title="Hold to undo the last MUTATE or NEW">↶ RESTORE</button><button id="btn-tape" class="utility utility-tape" aria-pressed="false" title="Tap to record or stop a performance (max 30 sec)">● TAPE</button></div>
       <div class="bottom-right"><button id="btn-new" class="utility">✳ NEW</button><button id="btn-export" class="utility utility-export">⬇ MAKE WAV</button></div>
     </div>
     <div id="export-panel" class="export-panel" hidden>
@@ -45,7 +52,8 @@
       <a id="download-link" href="#" download="wrong-number-loop.wav" hidden>DOWNLOAD WAV ↗</a>
       <button id="btn-share" hidden>SHARE / SAVE TO FILES</button>
     </div>
-    <div class="footer-line"><span id="live-message">SYNTH / READY</span><span>v0.1.2 <span aria-hidden="true">●</span></span></div>
+    <div class="footer-line"><span id="live-message">SYNTH / READY</span><span>v0.1.3 <span aria-hidden="true">☣</span></span></div>
+    <div class="underprint" aria-hidden="true">CUTE ENOUGH TO BITE <span>★</span> MADE OF MISTAKES <span>★</span> PLAY AT YOUR OWN RISK</div>
   </main>
   <details class="help">
     <summary>MANUAL / HOW TO PLAY</summary>

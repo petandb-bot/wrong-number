@@ -1,4 +1,4 @@
-/* WRONG NUMBER v0.1.2 — pocket instrument
+/* WRONG NUMBER v0.1.3 — pocket instrument
  * Timing: Web Audio's currentTime, with a 25ms look-ahead scheduler.
  * Screen: p5.js v1.11.13 when available, local Canvas fallback offline.
  * Playback: all synthesis and mutations remain local to the browser.
@@ -160,7 +160,9 @@ function renderPads(){
  const container=$('pads');container.innerHTML='';
  A.KIT_NAMES.forEach((name,index)=>{
   const b=document.createElement('button');b.className='pad';b.type='button';b.setAttribute('aria-label',`${index+1} ${name}`);
-  b.innerHTML=`<span class="pad-no">${String(index+1).padStart(2,'0')}</span><span class="pad-tick"></span><span class="pad-name">${name}</span>`;
+  // Pad icons are purely graphical. Never change the pad-to-sound mapping.
+  const motifs=['✦','♫','☻','☁','♥','✧','☽','✿','⚡','◎','☠','✳','▦','♬','☀','★'];
+  b.innerHTML=`<span class="pad-no">${String(index+1).padStart(2,'0')}</span><span class="pad-icon" aria-hidden="true">${motifs[index]}</span><span class="pad-tick"></span><span class="pad-name">${name}</span>`;
   b.addEventListener('pointerdown',event=>{
    if(event.button!==0&&event.pointerType==='mouse')return;
    event.preventDefault();try{b.setPointerCapture(event.pointerId);}catch{}
@@ -248,7 +250,7 @@ function mutate(strong=false){
  scene.seed=randomSeed();scene.color.broken=A.clamp(scene.color.broken+(r()-.44)*(strong?.62:.29),.05,.92);
  scene.color.space=A.clamp(scene.color.space+(r()-.49)*(strong?.44:.23),.05,.85);
  scene.color.shift=A.clamp(scene.color.shift+(r()-.5)*(strong?2:.65),-1.6,1.6);
- persist();message(strong?'MUTATION / HEAVY':'MUTATION / LIGHT');
+ glitchUntil=performance.now()+(strong?1600:800);persist();message(strong?'MUTATION / HEAVY':'MUTATION / LIGHT');
 }
 function keep(){checkpoint=deepCopy(scene);try{localStorage.setItem(KEEP,JSON.stringify(checkpoint));}catch{}message('SNAPSHOT KEPT');updateText();}
 function restore(){if(!checkpoint){message('NO SNAPSHOT YET');return;}scene=deepCopy(checkpoint);resetPlayhead();persist();message('SNAPSHOT RESTORED');}
@@ -374,31 +376,84 @@ async function stopTape(){
  }catch(err){console.error(err);$('export-status').textContent='TAPE EXPORT FAILED / '+String(err?.message||err).slice(0,90);message('TAPE EXPORT FAILED',4);}
  finally{finishRender();}
 }
-// LCD renderer. Uses a logical pixel grid to evoke LCD hardware without scanline-heavy decoration.
+// v0.1.3 — pixel bunny. Entirely visual; the synthesis/scheduler/export paths are unchanged.
+// Draw in the same 320x128 backing resolution for p5 and Canvas fallback.
 function paint(ctx,w,h){
- const t=performance.now()/1000;ctx.clearRect(0,0,w,h);
- const playing=isPlaying,active=pulseUntil.some(until=>until>performance.now());
- ctx.fillStyle='#aab89e';ctx.fillRect(0,0,w,h);
- ctx.globalAlpha=.19;ctx.fillStyle='#3a5743';
- for(let x=0;x<w;x+=10)ctx.fillRect(x,8,1,h-13);
- for(let y=8;y<h;y+=10)ctx.fillRect(0,y,w,1);
+ const now=performance.now(),t=now*.001;
+ const playing=isPlaying,active=pulseUntil.some(until=>until>now),isMutating=now<glitchUntil;
+ const energy=(playing?.42:.12)+(active?.43:0)+(tape?.10:0);
+ const bounce=Math.sin(t*(playing?9:3.3))*(playing?4.1:2.1);
+ ctx.clearRect(0,0,w,h);ctx.fillStyle='#b8e58b';ctx.fillRect(0,0,w,h);
+ // Faint dotted LCD matrix, not a waveform or spectral meter.
+ ctx.fillStyle='#52713c';ctx.globalAlpha=.11;
+ for(let x=4;x<w;x+=8)for(let y=5;y<h;y+=8)ctx.fillRect(x,y,1,1);
  ctx.globalAlpha=1;
- const yMid=h*.40;ctx.fillStyle='#3e5b43';
- for(let i=0;i<64;i++){
-  const x=6+i*4.8,n=(i*.37)+t*(playing?2.7:1.1),beat=playing?Math.pow(Math.max(0,Math.sin((t*scene.bpm/60)*Math.PI*2)),13):.025;
-  const a=Math.abs(Math.sin(n)*Math.sin(i*.11+t*.29))+Math.abs(Math.cos(i*1.13+n*.31))*.25;
-  const level=3+24*a*(active?.93:playing?.60:.22)+beat*10;
-  ctx.fillRect(Math.floor(x),Math.round(yMid-level/2),3,Math.max(2,Math.floor(level)));
+ const ink='#294522',shadow='#507a36',warn='#577b20';
+ function dot(x,y,r=2,col=ink){ctx.fillStyle=col;ctx.fillRect(Math.round(x),Math.round(y),r,r);}
+ function text(s,x,y,size=10){ctx.fillStyle=ink;ctx.font=`bold ${size}px monospace`;ctx.fillText(s,x,y);}
+ // LCD edge messages: tiny, deliberately odd, but readable.
+ text(playing?'LOOP: ALIVE':'PET ME',7,16,10);
+ text(bankLabel()==='SAMPLE'?'FRESH MEAT':'CANDY KIT',7,30,8);
+ text(isMutating?'ERROR!':'HAPPY?',258,16,10);
+ text(tape?'REC ●':active?'OUCH!':'NO SIGNAL',253,30,8);
+ const heart=(x,y)=>{[['0110','1111','1111','0110','0010']].forEach(pattern=>pattern.forEach((row,yy)=>{for(let xx=0;xx<4;xx++)if(row[xx]==='1')dot(x+xx*3,y+yy*3,2,warn)}));};
+ heart(20,52);heart(278,53);
+ // Bunny mask: dot-matrix silhouette, with independently animated ears and feet.
+ ctx.save();ctx.translate(160,11);ctx.scale(.76,.76);ctx.translate(-160,0);
+ const centerX=160,baseY=18 + bounce;
+ // Dot-raster helper makes irregular analog-looking LCD pixels without smoothing.
+ const step=3.3;
+ function oval(cx,cy,rx,ry,fill=true,twist=0){
+  for(let iy=-Math.ceil(ry);iy<=Math.ceil(ry);iy++){
+   for(let ix=-Math.ceil(rx);ix<=Math.ceil(rx);ix++){
+    const q=Math.pow((ix+iy*twist)/rx,2)+Math.pow(iy/ry,2);
+    if((fill&&q<.9)||(!fill&&q>.70&&q<1.18))dot(cx+ix*step,cy+iy*step,2.35);
+   }
+  }
  }
- const top=Math.floor(h*.66),cell=(w-14)/N;
- for(let step=0;step<N;step++){
-  const events=scene.events.filter(e=>e.step===step),height=3+Math.min(4,events.length)*4;
-  ctx.fillStyle=events.length?'#365440':'#7d927d';
-  ctx.fillRect(7+Math.floor(step*cell),top+20-height,Math.max(3,Math.floor(cell-2)),height);
+ // Two lively ears: slight horizontal skew creates dancing rather than static bobbing.
+ const wiggle=Math.round(Math.sin(t*4.2)*(active?2:1));
+ oval(centerX-21+wiggle,baseY+20,4.2,9.5,true,-.09);
+ oval(centerX+20-wiggle,baseY+22,4.3,10,true,.09);
+ // Corroded, lighter patches inside both ears.
+ ctx.fillStyle='#8fc15f';
+ for(const side of [-1,1])for(let i=0;i<6;i++)dot(centerX+side*20,baseY+4+i*3.3,2.2,'#8fc15f');
+ oval(centerX,baseY+55,15.8,13.2,false);
+ oval(centerX,baseY+91,12.2,11.8,false);
+ // LCD-face features. A rare third eye / delayed blink makes it subtly uncanny.
+ const blink=Math.sin(t*.72)>.992;
+ for(const side of [-1,1]){
+  const ex=centerX+side*20,ey=baseY+51;
+  if(blink){dot(ex-3,ey,7,ink);}else{dot(ex-2,ey,6,ink);dot(ex,ey+1,2,'#b8e58b');}
+  dot(ex-side*2,ey+12,3,shadow);
  }
- if(playing){const mark=(nextStep-1+N)%N;ctx.fillStyle='#263e31';ctx.fillRect(7+Math.floor(mark*cell)-1,top+23,Math.max(3,Math.floor(cell-1)),3);}
- ctx.fillStyle='#385342';ctx.font='bold 9px monospace';ctx.fillText('A  B  C  D  /  MEMORY SYSTEM',6,h-4);
+ // Off-center triangular nose and crooked little mouth.
+ dot(centerX-1,baseY+60,4,ink);
+ dot(centerX-5,baseY+66,3,ink);dot(centerX+1,baseY+68,3,ink);dot(centerX+6,baseY+65,2,ink);
+ if(isMutating||Math.sin(t*.31)>.998){dot(centerX,baseY+39,5,ink);dot(centerX+1,baseY+40,2,'#b8e58b');}
+ const armShift=Math.sin(t*(playing?9.2:3.2))*5*(active?1.2:.7);
+ // Waving front paws.
+ oval(centerX-42,baseY+91+armShift,4.6,6.2);
+ oval(centerX+41,baseY+91-armShift,4.6,6.2);
+ oval(centerX-15,baseY+113+Math.abs(bounce)*.5,7,3);
+ oval(centerX+15,baseY+113-Math.abs(bounce)*.5,7,3);
+ // Occasional micro-glitch: split dots / ghost mouth during mutation.
+ if(isMutating){
+  for(let i=0;i<6;i++){
+   const x=107+((i*53+Math.floor(now/80)*17)%105);
+   dot(x,baseY+29+i*12,8,'#527d3e');
+  }
+  text('!!',226,68,16);
+ }
+ ctx.restore();
+ // No audio waveform: just small status LEDs and rabbit footprints.
+ for(let i=0;i<8;i++){
+  const on=(playing ? i===Math.floor((nextStep%32)/4) : i===Math.floor(t*2)%8);
+  dot(12+i*12,h-10,on?5:3,on?ink:shadow);
+ }
+ for(let i=0;i<5;i++)dot(250+i*12,h-10,3,(i<Math.min(5,Math.floor(energy*5)))?ink:shadow);
 }
+let glitchUntil=0;
 let fallbackFrame=0;
 function startCanvasFallback(){const canvas=$('display-fallback'),context=canvas.getContext('2d');if(!context)return;let last=0;const frame=(now)=>{if(canvas.hidden)return;if(now-last>40){paint(context,320,128);last=now;}fallbackFrame=requestAnimationFrame(frame);};fallbackFrame=requestAnimationFrame(frame);}
 function attemptP5(){
