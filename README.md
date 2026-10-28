@@ -1,68 +1,52 @@
-# WRONG NUMBER v0.1.7.1 — LIVE JAM / DUB FIX
+# WRONG NUMBER v0.1.8 — PLAYABLE SPACE
 
-A tiny candy-poison portable instrument for phones and desktop browsers. Five synthesized sound kits, 16 illustrated performance pads, three dancing pixel rabbits, live jam, 16th-note overdubbing, mutate, snapshots, tape and loop WAV export.
+A small pocket instrument, built with p5.js, Web Audio and GitHub Pages. Five distinct synthesized kits, 16 touch pads, three dancing Game & Watch rabbits, LIVE JAM, OVERDUB, MUTATE, TAPE and WAV export.
 
-## Publish on GitHub Pages
+## Install on GitHub Pages
 
-1. Unzip `WRONG_NUMBER_v0.1.7.1_DUB_FIX_GitHub_Pages.zip`.
-2. Upload **all files and folders inside** `wrong-number-v0.1.7.1/` to the root of your existing GitHub repository. Replace old files.
-3. In GitHub **Settings → Pages**, select **Deploy from a branch**, **main**, **/(root)** if you have not enabled Pages already.
-4. Open the HTTPS URL in Safari. To use it like an app, select **Share → Add to Home Screen**.
-5. If your previous PWA remains visible, close and reopen it. The service worker has a new versioned cache (`wrong-number-v0.1.7.1`).
+1. Extract `WRONG_NUMBER_v0.1.8_PLAYABLE_SPACE_GitHub_Pages.zip`.
+2. Upload **everything inside** `wrong-number-v0.1.8/` to the **root** of your existing GitHub repository, replacing older files. Do not upload only the HTML. In particular, `app.js`, `audio.js`, `sw.js` and the `assets/` folder must be replaced.
+3. Enable **Settings → Pages → Deploy from a branch → main → /(root)** if needed.
+4. Visit the HTTPS GitHub Pages site on your iPhone using Safari. In Safari's sharing menu choose **Add to Home Screen**.
+5. If the previous app is still displayed, load the Pages URL in Safari while connected, refresh, close the Home Screen app and reopen it. All code asset URLs and the service worker cache are versioned to 0.1.8.
 
-This is a static, local-only instrument. No microphone permissions, uploads, login or build tools are needed. The audio engine uses Web Audio. p5.js 1.11.13 paints the display if its CDN is available, with an internal Canvas fallback offline.
+## Start here: play with the machine
 
-## PLAY / LIVE JAM / DUB
+1. **NEW (tap)** — create an **OPEN** two-bar groove with 10–16 notes. It intentionally leaves silence for you.
+2. **LOOP** — start playback. The three rabbits follow the beat.
+3. **PADS** — jam on top. Your taps are immediate and don't overwrite the pattern. While playing, the backing drops slightly in level so your notes can be heard.
+4. **DUB** — tap once to record your part. Tap a few accents or hold a pad. Tap DUB again to finish. New notes replace nearby notes in the same sound family instead of accumulating endlessly.
+5. **MUTATE** — change positions and sounds without growing the number of notes. Hold for a wilder variation.
+6. **KEEP / RESTORE** — save a favorite groove and bring it back. Hold RESTORE to undo up to eight recent mutations, new grooves or overdubs.
+7. **TAPE / WAV** — record a live performance (up to 30 seconds) or export the current two-bar loop as a 44.1 kHz, stereo 16-bit WAV.
 
-- **PLAY:** Tap one of the 16 pads for immediate sound, tap rapidly for varying attacks, or hold for tempo-related repeating fragments. Playing multiple pads at once is supported.
-- **LOOP:** Starts a two-bar loop using the last free performance; if none is available, starts a generated beat. Tap LOOP again to stop.
-- **JAM (normal):** While LOOP is playing, all pad taps are live only. They **never modify the underlying loop**. You can experiment without damaging the pattern.
-- **● DUB:** Tap the fourth large button to arm overdubbing. This also starts LOOP if it was stopped. Tap or hold pads to add hits to the **next pass** of the pattern. Live hits sound immediately; the *recorded positions* are rounded to the nearest 16th note. Tap ● DUB again to finish and save pending notes. Tapping LOOP to stop also saves pending notes.
-- **HOLD REPEAT:** Press and hold any pad. After a short intentional hold, the pad produces repeated fragments paced according to BPM and pad group. Holding during DUB can record these fragments. Release to stop.
-- **MUTATE:** Evolves a pattern and starts it if stopped. Hold MUTATE for a stronger mutation. When DUB is active, MUTATE finishes that overdub before transforming the pattern.
-- **KEEP:** Saves the current pattern and kit. **RESTORE:** Recalls it. Holding RESTORE undoes previous mutations, new grooves and overdubs, up to eight snapshots.
-- **NEW:** Generates a kit-aware two-bar groove. **TAPE:** Records the loop plus live taps as performed for up to 30 seconds, then renders WAV. **↓ WAV:** Exports the current two-bar pattern as seamless stereo 44.1kHz/16-bit PCM. **− / +:** Changes BPM.
-- **KITS:** CANDY KIT / TOY MALFUNCTION / SUGAR POISON / ROTTEN CARROT / WORM PARADE. Tap the kit name or arrows to change the sound world. The loop uses whichever kit is currently selected; TAPE preserves the kit at each performed hit.
-- **DESKTOP KEYS:** `1234`, `QWER`, `ASDF`, `ZXCV` for the 16 pads. Keyboard holds repeat too.
+### Other gestures
 
-### Example session
+- **NEW (hold ~0.6 s)** — generate a busy **FULL** groove, similar to the earlier versions, for listening rather than jamming. The LCD footer indicates `FULL` or `SPACE`.
+- **PADS (hold)** — tempo-following repeat; release to stop. Different pad groups have different repeat patterns.
+- **− / +** — tempo changes, 48–180 BPM.
+- **SOUND KIT / arrows** — change among CANDY KIT, TOY MALFUNCTION, SUGAR POISON, ROTTEN CARROT and WORM PARADE.
+- **DESKTOP** — play pads with `1 2 3 4`, `Q W E R`, `A S D F`, `Z X C V`.
+- **KEEP** stores a separate snapshot; **RESTORE** short press restores it, long press rolls back the latest edit.
 
-1. Tap **NEW**, then **LOOP** (or just **LOOP** with an empty scene).
-2. Tap extra sounds freely while the loop runs — this is **JAM**.
-3. Tap **● DUB**. Play a few extra taps or hold a pad for a rhythmic roll.
-4. Tap **● DUB** again. Your recorded additions loop automatically.
-5. Press **KEEP**, explore **MUTATE**, and use **RESTORE** if needed.
-6. Tap **TAPE** to record improvisation, or **↓ WAV** to export the loop.
+## What changed from v0.1.7.1
 
-## Technical design
+- A short press of NEW makes a deliberately sparse, playable groove (roughly 10–16 steps/events over two bars); holding NEW brings back a fuller pattern. The 16 original pad voices in each of the five kits are unchanged.
+- JAM stays immediate. While live pads play, accompaniment-only dry audio is gently ducked (not the entire master output), and recovers automatically. No microphone or sample permissions are needed.
+- DUB uses 16th-note quantization for saved events but does not delay your live hits. Notes in the same register and adjacent grid positions are replaced, not stacked; OPEN grooves are capped at 28 events and full grooves at 40. A 2-voice-per-grid-step limit keeps the mix less cluttered.
+- MUTATE moves pitches/positions and subtly varies timbre, without adding events. It tries new free positions when two notes would collide, preserving the groove through successive mutations.
+- Offline TAPE WAV recreates the same backing/foreground routing as live playback. Seamless loop WAV exports only the backing pattern, as before.
+- Existing scenes and KEEP snapshots use the same localStorage keys. An older stored busy groove remains unchanged until you press NEW or edit it; press **NEW** once to experience the new SPACE behavior.
+- No additional screen buttons, no removed kits, no replacement of the rabbits or custom icons.
 
-- The live sound fires instantly (no audible quantization latency). Quantization only affects recording.
-- DUB notes are staged until the next cycle boundary to prevent a second hit on the current pass; switching DUB off flushes any remaining notes into the saved pattern.
-- Duplicate hits from the same pad on a grid step are merged to avoid digital clipping. The stored pattern has a 64-event limit; important low-frequency anchors are prioritized when full.
-- Loop timing uses `AudioContext.currentTime` and a 25ms scheduler with lookahead. Rabbit dance phase follows the same beat clock while looping.
-- Changing tempo while DUB is armed finishes the DUB first and restarts the scheduled playhead. The short restart is intentional to avoid a timing mismatch.
-- TAPE records the scheduled voices *and* manual live voices. Loop WAV renders the current loop events, not temporary JAM notes. The file generator works without a server.
-- Previous session and KEEP localStorage keys are preserved. Existing patterns still load. No previously stored samples are deleted, though MIC/FILE/SAMPLE are not available in this version.
+## Implementation
 
-## Test and support
+`index.html`, `style.css`, `app.js`, `audio.js`, `icons.js`, `sw.js`, `manifest.webmanifest`, `assets/`. The English in-app manual is under **MANUAL / HOW TO PLAY**. Web Audio and offline rendering do all synthesis locally. p5.js 1.11.13 is loaded from CDN if available; a Canvas fallback keeps the LCD running offline.
 
-Chromium desktop automation checks LIVE JAM isolation, armed DUB, quantization, undo, mutate, kit audio, TAPE/WAV and 320×568 through 430×800 mobile viewports. **No physical iPhone Safari/Home Screen testing was possible here.** The audio should be played in the foreground; iOS may suspend background audio. Avoid very loud headphones while testing an unfamiliar sound kit.
+To preview locally, run `python -m http.server 8000` from the app directory, then open `http://localhost:8000` on your computer.
 
-The short English manual is also available from **MANUAL / HOW TO PLAY** beneath the instrument.
+## Testing and limitations
 
-Files: `index.html`, `style.css`, `app.js`, `audio.js`, `icons.js`, `sw.js`, `manifest.webmanifest`, `assets/`, `tests/`.
+Automated tests used headless **Chromium** for all 5×16 synthesized pads, short and long NEW, consecutive MUTATE, DUB touch, LOOP, WAV export, TAPE and 320–430px viewports. Physical iPhone Safari / installed Home Screen behavior **has not been tested**. The browser can pause audio when you switch apps or lock the screen. Start at moderate headphone volume.
 
-For local preview, serve this directory over HTTP (`python -m http.server 8000`) and open `http://localhost:8000`.
-
-## v0.1.7.1 — iPhone DUB reliability patch
-
-- The DUB button now switches its state directly from `pointerup`, instead of waiting for a synthesized `click`. As with MUTATE, keyboard and accessibility clicks remain supported.
-- The touch is captured, a drag or canceled touch does not start recording, and the duplicate click is suppressed.
-- On the initial touch down, AudioContext is unlocked within the user's gesture so that a stopped loop can be started reliably.
-- DUB explicitly reports **● RECORDING** while enabled; a second press saves the pending notes and returns to JAM.
-- The PWA cache and the page's CSS/JavaScript URLs are versioned to prevent stale cross-version mixes after a GitHub Pages deploy.
-- This changes neither the five synthesis kits nor the loop / mutate / tape / WAV engines.
-
-If the installed iPhone home-screen app still looks like v0.1.7, open your GitHub Pages URL in Safari while online, refresh it, close the home-screen app fully, and launch it again.
-
-Automated Chromium mobile emulation tests cover pointer/touch, synthesized-click suppression, keyboard and cancellation. iPhone Safari hardware was not available for testing.
+Previous MIC/FILE sample banks are not used in v0.1.8. Data previously saved in local storage is not intentionally deleted. Keep a backup of your existing repository before overwriting.

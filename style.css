@@ -1,4 +1,4 @@
-/* WRONG NUMBER v0.1.7.1 — LIVE JAM / DUB fix
+/* WRONG NUMBER v0.1.8 — PLAYABLE SPACE / LIVE JAM
    Pop-toy interface; compact play surface, iPhone-first; no emoji-dependent icons. */
 :root{font-family:ui-rounded,system-ui,-apple-system,"Arial Rounded MT Bold",sans-serif;color:#30113b;background:#301036;font-synthesis:none;-webkit-text-size-adjust:100%}
 *{box-sizing:border-box}html{min-height:100%;background:#301036}body{margin:0;min-height:100dvh;padding:calc(env(safe-area-inset-top) + 6px) 8px calc(env(safe-area-inset-bottom) + 12px);background:radial-gradient(ellipse at 50% 0%,#6f224f,#2c113b 64%);touch-action:manipulation;overscroll-behavior-y:contain}

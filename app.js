@@ -1,4 +1,4 @@
-/* WRONG NUMBER v0.1.7.1 — LIVE JAM / DUB touch fix
+/* WRONG NUMBER v0.1.8 — PLAYABLE SPACE / non-destructive jam
  * Timing: Web Audio's currentTime, with a 25ms look-ahead scheduler.
  * Screen: p5.js v1.11.13 when available, local Canvas fallback offline.
  * Playback: all synthesis and mutations remain local to the browser.
@@ -10,16 +10,16 @@ const MAX_TAPE_SECONDS=30, TAPE_TAIL_SECONDS=2.5;
 const randomSeed=()=>((Math.random()*0xffffffff)>>>0);
 const deepCopy=v=>JSON.parse(JSON.stringify(v));
 const getSaved=k=>{try{return JSON.parse(localStorage.getItem(k));}catch{return null;}};
-const newScene=()=>({bpm:92,seed:randomSeed(),color:{broken:.24,space:.27,shift:0},kit:0,events:[]});
+const newScene=()=>({bpm:92,seed:randomSeed(),groove:'open',color:{broken:.24,space:.27,shift:0},kit:0,events:[]});
 function validateScene(raw){
  if(!raw||typeof raw!=='object'||!Array.isArray(raw.events))return null;
- return {bpm:A.clamp(Number(raw.bpm)||92,48,180),seed:(raw.seed>>>0)||3,kit:A.clamp(Math.floor(Number(raw.kit)||0),0,4),color:{broken:A.clamp(Number(raw.color?.broken)||.18,0,1),space:A.clamp(Number(raw.color?.space)||.25,0,1),shift:A.clamp(Number(raw.color?.shift)||0,-2,2)},events:raw.events.slice(0,64).filter(e=>Number.isInteger(e.step)&&e.step>=0&&e.step<N&&Number.isInteger(e.pad)&&e.pad>=0&&e.pad<16).map(e=>({step:e.step,pad:e.pad,velocity:A.clamp(Number(e.velocity)||.85,.2,1),variant:(e.variant>>>0)||1}))};
+ return {bpm:A.clamp(Number(raw.bpm)||92,48,180),seed:(raw.seed>>>0)||3,groove:['open','full','classic'].includes(raw.groove)?raw.groove:'classic',kit:A.clamp(Math.floor(Number(raw.kit)||0),0,4),color:{broken:A.clamp(Number(raw.color?.broken)||.18,0,1),space:A.clamp(Number(raw.color?.space)||.25,0,1),shift:A.clamp(Number(raw.color?.shift)||0,-2,2)},events:raw.events.slice(0,64).filter(e=>Number.isInteger(e.step)&&e.step>=0&&e.step<N&&Number.isInteger(e.pad)&&e.pad>=0&&e.pad<16).map(e=>({step:e.step,pad:e.pad,velocity:A.clamp(Number(e.velocity)||.85,.2,1),variant:(e.variant>>>0)||1,origin:e.origin==='dub'?'dub':e.origin==='auto'?'auto':'legacy'}))};
 }
 let scene=validateScene(getSaved(STORE))||newScene(),checkpoint=validateScene(getSaved(KEEP));
 let live=null,engine=null,isPlaying=false,scheduler=null,nextStep=0,nextTick=0,loopStarted=0,cycleAnchor=0,perfCounter=0,lastPadAt=new Map(),recent=[],downPointers=new Map(),pulseUntil=new Array(16).fill(0),lastPad=-1,displayMessage='READY / TOUCH A PAD',messageUntil=0,renderBusy=false,wavUrl=null,wavFile=null,tape=null,tapeClock=null,undoStack=[];
 // JAM is always live and non-destructive. DUB is armed explicitly and stores
 // quantized events for the NEXT pass, never doubling the currently played tap.
-let dubArmed=false,pendingDub=[],dubUndoSaved=false,dubSessionCount=0;
+let dubArmed=false,pendingDub=[],dubUndoSaved=false,dubSessionCount=0,backingGraph=null;
 
 // The previous session and 16-pad layout remain compatible with v0.1.4.
 let stateAt=()=>live?.currentTime??0;
@@ -51,7 +51,7 @@ function updateText(){
  $('btn-dub').setAttribute('aria-pressed',String(dubArmed));
  $('btn-dub').setAttribute('aria-label',dubArmed?'Stop overdub recording':'Start overdub recording');
  $('btn-dub').querySelector('small').textContent=dubArmed?'● RECORDING':'OVERDUB';
- $('live-message').textContent=`${dubArmed?'● DUB +'+pendingDub.length:isPlaying?'JAM':'READY'} / ${A.KIT_SHORT[scene.kit]} / ${scene.events.length.toString().padStart(2,'0')} NOTES`; 
+ $('live-message').textContent=`${dubArmed?'● DUB +'+pendingDub.length:isPlaying?'JAM':'READY'} / ${A.KIT_SHORT[scene.kit]} / ${scene.events.length.toString().padStart(2,'0')} HITS / ${scene.groove==='full'?'FULL':'SPACE'}`; 
  updateKitUi();
 }
 function message(s,seconds=1.7){displayMessage=s;messageUntil=performance.now()+seconds*1000;$('status-text').textContent=s;updateText();}
@@ -59,7 +59,7 @@ function persist(){try{localStorage.setItem(STORE,JSON.stringify(scene));}catch{
 function ensureAudio(){
  try{
   if(!live||live.state==='closed'){
-   live=new (window.AudioContext||window.webkitAudioContext)({latencyHint:'interactive'});engine=A.graph(live);
+   live=new (window.AudioContext||window.webkitAudioContext)({latencyHint:'interactive'});engine=A.graph(live);backingGraph={...engine,dry:engine.backingDry};
   }
   if(live.state!=='running')live.resume().catch(()=>message('AUDIO INTERRUPTED / TAP AGAIN',3));
   return true;
@@ -70,8 +70,8 @@ function synth(pad,when,velocity=.9,options={}){
  if(!engine)return;
  const time=Math.max(when,live.currentTime+.001);
  const kit=Number.isInteger(options.kit)?options.kit:scene.kit;
- const params={seed:options.seed??(scene.seed ^ (++perfCounter*98923)),velocity,color:{...(options.color||scene.color)},kit,hold:!!options.hold,fire:!!options.fire};
- A.scheduleKitVoice(engine,pad,time,params);
+ const params={seed:options.seed??(scene.seed ^ (++perfCounter*98923)),velocity,color:{...(options.color||scene.color)},kit,hold:!!options.hold,fire:!!options.fire,role:options.role||'jam'};
+ A.scheduleKitVoice(options.role==='loop'&&backingGraph?backingGraph:engine,pad,time,params);
  // Capture the exact kit per event. Switching kits during TAPE remains audible in export.
  if(tape && time>=tape.startedAt && time<tape.startedAt+MAX_TAPE_SECONDS){tape.events.push({pad,at:time-tape.startedAt,params});}
  const ms=(time-live.currentTime)*1000;
@@ -83,27 +83,60 @@ function snapToStep(at){
  const phase=((at-cycleAnchor)%cycle+cycle)%cycle;
  return Math.round(phase/sec)%N;
 }
+// Preserve musical breathing room. Two nearby attacks in one sound family
+// generally compete; the most recently overdubbed one wins instead of stacking.
+const family=pad=>Math.floor(pad/4);
+const circularDistance=(a,b)=>Math.min(Math.abs(a-b),N-Math.abs(a-b));
+function balancePattern(input,limit=28,reposition=false){
+ const ranked=input.map((event,i)=>({...event,_i:i})).sort((a,b)=>{
+  const rank=e=>(e.origin==='dub'?100:0)+(e.pad<4&&e.step%8===0?30:0)+(e.origin==='legacy'?10:0);
+  return rank(b)-rank(a)||b._i-a._i;
+ });
+ const kept=[];
+ for(const e of ranked){
+  if(kept.length>=limit)break;
+  const near=family(e.pad)===3?2:1;
+  const free=step=>!kept.some(x=>family(x.pad)===family(e.pad)&&circularDistance(step,x.step)<=near)
+   &&kept.filter(x=>x.step===step).length<2;
+  if(!free(e.step)){
+   if(!reposition)continue; // DUB replaces nearby accompaniment; never move it unexpectedly.
+   // MUTATE keeps its event budget instead of slowly erasing the pattern after many presses.
+   const offsets=[-2,2,-3,3,-4,4,-5,5,-6,6,-8,8,-10,10,-12,12,-14,14,16];
+   const target=offsets.map(d=>(e.step+d+N)%N).find(free);
+   if(target===undefined)continue;
+   e.step=target;
+  }
+  kept.push(e);
+ }
+ return kept.map(({_i,...event})=>event).sort((a,b)=>a.step-b.step||a.pad-b.pad);
+}
+function duckBacking(at){
+ if(!isPlaying||!engine?.backingDry)return;
+ const gain=engine.backingDry.gain;
+ // Duck accompaniment only; never the player's voice or the master output.
+ gain.cancelScheduledValues(at);
+ gain.setTargetAtTime(.56,at,.025);
+ gain.setTargetAtTime(1,at+.23,.10);
+}
 function queueDub(pad,velocity,at){
  if(!isPlaying||!dubArmed)return;
  const step=snapToStep(at);
  // Repeated hits on the same pad and grid step should not stack and clip.
- const found=pendingDub.find(e=>e.pad===pad&&e.step===step);
- if(found){found.velocity=Math.max(found.velocity,velocity);return;}
+ const found=pendingDub.find(e=>family(e.pad)===family(pad)&&circularDistance(e.step,step)<=1);
+ if(found){found.pad=pad;found.step=step;found.velocity=Math.max(found.velocity,velocity);updateText();return;}
  if(!dubUndoSaved){rememberUndo();dubUndoSaved=true;}
- pendingDub.push({pad,step,velocity,variant:randomSeed()});
+ pendingDub.push({pad,step,velocity,variant:randomSeed(),origin:'dub'});
  dubSessionCount++;
  updateText();
 }
 function commitDub(){
  if(!pendingDub.length)return 0;
  const count=pendingDub.length;
- // Limit polyphony while retaining existing downbeat anchors and recent performance.
+ // Human performance replaces near-simultaneous sounds in its register.
+ // It cannot silently push the whole groove towards 64 overlapping events.
  const joined=[...scene.events,...pendingDub];
- if(joined.length>64){
-  const anchors=joined.filter(e=>e.pad<4&&e.step%8===0);
-  const others=joined.filter(e=>!(e.pad<4&&e.step%8===0));
-  scene.events=[...anchors.slice(-16),...others.slice(-Math.max(0,64-Math.min(16,anchors.length)))].slice(-64);
- }else scene.events=joined;
+ const cap=scene.groove==='full'?40:28;
+ scene.events=balancePattern(joined,cap);
  pendingDub=[];persist();
  return count;
 }
@@ -125,7 +158,8 @@ function playPad(pad,options={}){
  const now=stateAt(),last=lastPadAt.get(pad)??-100;
  const rapid=now-last<.25;lastPadAt.set(pad,now);
  const velocity=options.hold?.50:(rapid?.70:.92);
- synth(pad,now+.003,velocity,{hold:options.hold,fire:rapid||options.hold});
+ duckBacking(now);
+ synth(pad,now+.003,velocity,{hold:options.hold,fire:rapid||options.hold,role:'jam'});
  if(!options.hold){
   recent.push({pad,time:now,velocity:rapid?.72:.90,variant:perfCounter});
   recent=recent.filter(e=>e.time>=now-25).slice(-100);
@@ -173,7 +207,7 @@ function renderPads(){
   container.appendChild(b);
  });
 }
-function generate(seed=randomSeed()){
+function generateFull(seed=randomSeed()){
  const r=A.rng(seed ^ (scene.kit * 657913)),events=[],add=(step,pad,velocity=.85)=>events.push({step,pad,velocity,variant:(r()*0xffffffff)>>>0});
  const kit=scene.kit;
  for(let bar=0;bar<2;bar++){
@@ -202,14 +236,51 @@ function generate(seed=randomSeed()){
  }
  return events.slice(0,56);
 }
+// NEW (short tap): 10–16 notes in two bars. The deliberate holes are the instrument.
+// Families: body (0–3), hit (4–7), weird (8–11), tail (12–15).
+function generateOpen(seed=randomSeed()){
+ const r=A.rng((seed ^ Math.imul(scene.kit+1,0x45d9f3b))>>>0),kit=scene.kit;
+ const events=[],add=(step,pad,velocity=.85)=>events.push({step:step%N,pad,velocity,variant:(r()*0xffffffff)>>>0,origin:'auto'});
+ for(let bar=0;bar<2;bar++){
+  const o=bar*16;
+  // One reliable anchor, an occasional offbeat kick and an asymmetric backbeat.
+  add(o,bar===0?0:(kit===3?1:kit===4?2:0),.78+r()*.13);
+  if(r()<(kit===2?.47:.68))add(o+8,kit===4?3:r()<.72?0:2,.66+r()*.18);
+  const backbeat=kit===3?(r()<.5?5:7):kit===4?6:7;
+  add(o+(kit===4?6:4),backbeat,.52+r()*.25);
+  // Deliberate rest after the backbeat: the player can answer.
+  if(r()<.52)add(o+(kit===1?11:12),4+Math.floor(r()*4),.43+r()*.24);
+  if(r()<.84)add(o+[3,7,11,14][Math.floor(r()*4)],8+Math.floor(r()*4),.42+r()*.23);
+  if(r()<.70)add(o+[5,10,13][Math.floor(r()*3)],12+Math.floor(r()*4),.36+r()*.21);
+  if(r()<.65)add(o+[2,9,15][Math.floor(r()*3)],4+Math.floor(r()*4),.42+r()*.22);
+ }
+ // Sparse motifs vary with kit without becoming fill-heavy.
+ if(kit===1){add(11,10,.48);add(27,5,.54);}
+ else if(kit===2){add(15,13,.40);}
+ else if(kit===3){add(10,9,.55);add(23,6,.50);}
+ else if(kit===4){add(7,10,.55);add(29,11,.53);}
+ let playable=balancePattern(events,16);
+ // A quiet base should still have enough rhythmic information to respond to.
+ // Fill a few genuinely unused slots; never compensate with overlapping attacks.
+ for(let i=0;i<48 && playable.length<10;i++){
+  const step=(i*7+1+Math.floor(r()*3))%N;
+  const group=i%4===0?3:i%3===0?1:2;
+  const candidate={step,pad:group*4+Math.floor(r()*4),velocity:.40+r()*.22,variant:(r()*0xffffffff)>>>0,origin:'auto'};
+  const next=balancePattern([...playable,candidate],16);
+  if(next.length>playable.length)playable=next;
+ }
+ return playable;
+}
+function generate(seed=randomSeed(),full=false){return full?generateFull(seed):generateOpen(seed);}
+
 function captureRecent(){
  const now=stateAt(),input=recent.filter(x=>x.time>now-14);
- if(!input.length)return generate(scene.seed);
+ if(!input.length)return generate(scene.seed,scene.groove==='full');
  const first=input[0].time,stepDur=stepSeconds();
  const fromHands=input.map(e=>({step:Math.round((e.time-first)/stepDur)%N,pad:e.pad,velocity:e.velocity,variant:e.variant}));
  // With very little input, build an unobtrusive supporting pattern.
- if(fromHands.length<4){const background=generate(scene.seed).filter(e=>(e.pad===4||e.pad===7||e.pad===14||(e.pad<4&&e.step>=8))).slice(0,14);return [...fromHands,...background];}
- return fromHands.slice(0,56);
+ if(fromHands.length<4){const background=generateOpen(scene.seed).filter(e=>e.pad<4||e.pad===7).slice(0,5);return balancePattern([...fromHands.map(e=>({...e,origin:'dub'})),...background],16);}
+ return balancePattern(fromHands.map(e=>({...e,origin:'dub'})),24);
 }
 function stopLoop(){if(dubArmed){commitDub();dubArmed=false;dubUndoSaved=false;}isPlaying=false;clearInterval(scheduler);scheduler=null;nextStep=0;message('LOOP STOPPED / JAM READY');updateText();}
 function startLoop(){
@@ -227,7 +298,7 @@ function scheduleAhead(){
   if(nextStep===0&&pendingDub.length)commitDub();
   const step=nextStep,time=nextTick;
   const stepEvents=scene.events.filter(e=>e.step===step);
-  for(const e of stepEvents){synth(e.pad,time,e.velocity,{seed:(scene.seed^e.variant^e.step)>>>0,color:scene.color});}
+  for(const e of stepEvents){synth(e.pad,time,e.velocity,{seed:(scene.seed^e.variant^e.step)>>>0,color:scene.color,role:'loop'});}
   visualBeat=step; $('beat-readout').textContent=`${scene.bpm} BPM · ${1+Math.floor(step/16)}:${String(1+Math.floor(step%16/4)).padStart(2,'0')}`;
   nextStep=(step+1)%N;nextTick+=stepSeconds();
   if(nextStep===0)loopStarted=nextTick;
@@ -242,62 +313,61 @@ function undo(){
 }
 function mutate(strong=false){
  if(dubArmed)setDub(false);
- // v0.1.6: one press must create a new AUDIBLE groove, not just change saved data.
- // Protect primary downbeats while guaranteeing several changed notes each time.
  rememberUndo();
  if(!scene.events.length)scene.events=captureRecent();
- const previous=scene.events.map(e=>({...e}));
- const r=A.rng((scene.seed ^ randomSeed())>>>0);
- const kit=scene.kit,changed=[];
- const openness=[.37,.52,.41,.57,.64][kit],density=[.18,.25,.17,.26,.32][kit];
- const amount=strong?.79:openness;
- let moved=0;
- for(let i=0;i<previous.length;i++){
-  const e=previous[i],anchor=e.pad<4&&e.step%8===0;
-  if(!anchor&&r()<amount*.16)continue;
-  const item={...e};
-  // A predictable fraction changes onsets or instrument, even when the random draws are quiet.
-  if(!anchor&&(i%4===1 || r()<amount*.70)){
-   const direction=r()<.5?-1:1;
+ const original=scene.events.map(e=>({...e}));
+ const r=A.rng((scene.seed^randomSeed())>>>0);
+ // Rearrange a phrase, not layer new notes on top of it.
+ const changed=original.map(e=>({...e}));
+ let edits=0;
+ for(let i=0;i<changed.length;i++){
+  const item=changed[i],anchor=item.pad<4&&item.step%8===0;
+  if(anchor)continue;
+  if(r()<(strong?.75:.43)){
    const distance=strong?2+Math.floor(r()*5):1+Math.floor(r()*3);
-   item.step=(item.step+direction*distance+N)%N;
-   moved++;
+   item.step=(item.step+(r()<.5?-distance:distance)+N)%N;
+   edits++;
   }
-  if(!anchor&&(i%5===2||r()<amount*.40)){
-   const group=Math.floor(item.pad/4);
-   const next=(item.pad+1+Math.floor(r()*3))%4;
-   item.pad=group*4+next;
-   moved++;
+  if(r()<(strong?.52:.27)){
+   item.pad=family(item.pad)*4+Math.floor(r()*4);
+   edits++;
   }
-  item.velocity=A.clamp(item.velocity+(r()-.47)*(strong?.40:.24),.31,1);
-  item.variant=((item.variant^((r()*0xffffffff)>>>0))>>>0);
-  changed.push(item);
+  item.velocity=A.clamp(item.velocity+(r()-.5)*(strong?.27:.17),.36,.98);
+  item.variant=(item.variant^((r()*0xffffffff)>>>0))>>>0;
  }
- // Guaranteed cross-register accents. Light mutates 3–8 notes; heavy ones add more.
- const additions=Math.min(strong?14:8,Math.max(3,Math.round(previous.length*density*(strong?1.65:1))));
- for(let i=0;i<additions;i++){
-  const groups=kit===3?[1,2,2,3,0]:kit===4?[2,1,2,3,0]:[0,1,2,3];
-  const group=groups[Math.floor(r()*groups.length)];
-  changed.push({step:Math.floor(r()*N),pad:group*4+Math.floor(r()*4),velocity:.43+r()*.42,variant:(r()*0xffffffff)>>>0});
+ if(!edits && changed.length){const e=changed.find(e=>e.pad>=4)||changed[0];e.step=(e.step+2)%N;edits++;}
+ const cap=scene.groove==='full'?40:28;
+ scene.events=balancePattern(changed,cap,true);
+ // Ensure every press is audibly/structurally different, even if all randomly
+ // shifted notes happened to collide and were removed by the density guard.
+ const signature=events=>events.map(e=>`${e.step}:${e.pad}`).sort().join('|');
+ if(signature(scene.events)===signature(original)&&scene.events.length){
+  const chosen=scene.events.find(e=>e.pad>=4)||scene.events[0];
+  for(let offset=2;offset<N;offset++){
+   const candidate=(chosen.step+offset)%N;
+   if(scene.events.every(e=>e===chosen||family(e.pad)!==family(chosen.pad)||circularDistance(candidate,e.step)>1)){
+    chosen.step=candidate;break;
+   }
+  }
+  scene.events.sort((a,b)=>a.step-b.step||a.pad-b.pad);
  }
- // Remove only excess duplicates; capped to keep mobile audio rendering responsive.
- scene.events=changed.slice(0,64);
+ // If an older dense pattern is loaded, each mutation thins it instead of growing it.
+ if(scene.groove==='classic'&&scene.events.length>28)scene.events=scene.events.slice(0,Math.max(28,Math.floor(scene.events.length*.84)));
  scene.seed=randomSeed();
- scene.color.broken=A.clamp(scene.color.broken+(r()-.43)*(strong?.62:.28),.07,.92);
- scene.color.space=A.clamp(scene.color.space+(r()-.48)*(strong?.43:.22),.06,.85);
- scene.color.shift=A.clamp(scene.color.shift+(r()-.5)*(strong?1.9:.6),-1.6,1.6);
+ scene.color.broken=A.clamp(scene.color.broken+(r()-.5)*(strong?.38:.14),.07,.85);
+ scene.color.space=A.clamp(scene.color.space+(r()-.5)*(strong?.24:.10),.06,.80);
+ scene.color.shift=A.clamp(scene.color.shift+(r()-.5)*(strong?1.1:.42),-1.6,1.6);
  glitchUntil=performance.now()+(strong?1200:720);
  persist();
- const wasPlaying=isPlaying;
- if(!wasPlaying)startLoop(); // Immediately hear the result even from IDLE.
- message(`${strong?'WILD':'MUTATE'} / ${previous.length}→${scene.events.length} NOTES`,1.8);
+ if(!isPlaying)startLoop();
+ message(`${strong?'WILD':'MUTATE'} / ${original.length}→${scene.events.length} HITS`,1.8);
  const m=$('btn-mutate');m.classList.add('is-mutating');
  setTimeout(()=>m.classList.remove('is-mutating'),420);
 }
 
 function keep(){checkpoint=deepCopy(scene);keepUntil=performance.now()+1200;try{localStorage.setItem(KEEP,JSON.stringify(checkpoint));}catch{}message('SNAPSHOT KEPT');updateText();}
 function restore(){if(dubArmed){pendingDub=[];dubArmed=false;dubUndoSaved=false;}if(!checkpoint){message('NO SNAPSHOT YET');return;}scene=deepCopy(checkpoint);resetPlayhead();persist();message('SNAPSHOT RESTORED');}
-function fresh(){if(dubArmed)setDub(false);rememberUndo();scene={...newScene(),bpm:scene.bpm,kit:scene.kit};scene.events=generate(scene.seed);newUntil=performance.now()+1000;resetPlayhead();persist();message('NEW GROOVE');}
+function fresh(full=false){if(dubArmed)setDub(false);rememberUndo();scene={...newScene(),bpm:scene.bpm,kit:scene.kit,groove:full?'full':'open'};scene.events=generate(scene.seed,full);newUntil=performance.now()+1000;resetPlayhead();persist();message(full?'FULL BEAT / LISTEN':'SPACE BEAT / YOUR TURN',2);}
 function tempo(delta){if(dubArmed)setDub(false);scene.bpm=A.clamp(scene.bpm+delta,48,180);resetPlayhead();persist();message(`${scene.bpm} BPM`,.8);}
 function bindControls(){
  $('btn-source').addEventListener('click',()=>setKit(scene.kit+1));
@@ -343,7 +413,14 @@ function bindControls(){
   setDub(!dubArmed);
  });
  $('tempo-down').addEventListener('click',()=>tempo(-2));$('tempo-up').addEventListener('click',()=>tempo(2));
- $('btn-keep').addEventListener('click',keep);$('btn-new').addEventListener('click',fresh);
+ $('btn-keep').addEventListener('click',keep);
+ // Short NEW = playable space; deliberate long hold = busy full demo groove.
+ const newButton=$('btn-new');let newDown=0,lastNewPointer=0;
+ newButton.addEventListener('contextmenu',e=>e.preventDefault());
+ newButton.addEventListener('pointerdown',e=>{if(e.pointerType==='mouse'&&e.button!==0)return;newDown=performance.now();});
+ newButton.addEventListener('pointerup',()=>{if(!newDown)return;const full=performance.now()-newDown>=620;newDown=0;lastNewPointer=performance.now();fresh(full);});
+ newButton.addEventListener('pointercancel',()=>{newDown=0;});
+ newButton.addEventListener('click',()=>{if(performance.now()-lastNewPointer<650)return;fresh(false);});
  const restoreButton=$('btn-restore');let restoreDown=0,lastRestorePointer=0;
  restoreButton.addEventListener('contextmenu',e=>e.preventDefault());
  restoreButton.addEventListener('pointerdown',e=>{if(e.pointerType==='mouse'&&e.button!==0)return;restoreDown=performance.now();});
@@ -445,9 +522,16 @@ async function stopTape(){
   const sampleRate=44100,offset=.035,total=length+TAPE_TAIL_SECONDS;
   const frames=Math.ceil((offset+total)*sampleRate);
   const ctx=new (window.OfflineAudioContext||window.webkitOfflineAudioContext)(2,frames,sampleRate);
-  const g=A.graph(ctx);
+  const g=A.graph(ctx),backing={...g,dry:g.backingDry};
   for(const note of notes){
-   A.scheduleKitVoice(g,note.pad,offset+note.at,{...note.params});
+   const at=offset+note.at;
+   if(note.params.role==='jam'){
+    const gain=g.backingDry.gain;
+    // In the offline copy, faithfully reproduce accompaniment ducking.
+    gain.setTargetAtTime(.56,at,.015);
+    gain.setTargetAtTime(1,at+.20,.12);
+   }
+   A.scheduleKitVoice(note.params.role==='loop'?backing:g,note.pad,at,{...note.params});
   }
   const rendered=await ctx.startRendering();
   const first=Math.floor(offset*sampleRate);
@@ -534,7 +618,7 @@ function attemptP5(){
  script.onerror=()=>console.info('p5 CDN unavailable; internal Canvas fallback active');
  document.head.appendChild(script);
 }
-function init(){renderPads();bindControls();updateText();startCanvasFallback();attemptP5();if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('./sw.js?v=0.1.7.1', {updateViaCache:'none'}).catch(err=>console.warn('SW:',err));}
+function init(){renderPads();bindControls();updateText();startCanvasFallback();attemptP5();if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('./sw.js?v=0.1.8', {updateViaCache:'none'}).catch(err=>console.warn('SW:',err));}
 init();
-window.WrongNumberDebug={getScene:()=>deepCopy(scene),isPlaying:()=>isPlaying,isRecording:()=>!!tape,isDubArmed:()=>dubArmed,pendingDub:()=>deepCopy(pendingDub),setDub,commitDub,snapToStep,cycleAnchor:()=>cycleAnchor,playPad,captureRecent,mutate,fresh,undo,startLoop,stopLoop,startTape,stopTape,exportWav,renderPads,setKit,kitLabel,audioState:()=>({context:live?.state||'none',kit:scene.kit,master:engine?.dry?.gain?.value??null})};
+window.WrongNumberDebug={balancePattern,generateOpen,generateFull,getScene:()=>deepCopy(scene),isPlaying:()=>isPlaying,isRecording:()=>!!tape,isDubArmed:()=>dubArmed,pendingDub:()=>deepCopy(pendingDub),setDub,commitDub,snapToStep,cycleAnchor:()=>cycleAnchor,playPad,captureRecent,mutate,fresh,undo,startLoop,stopLoop,startTape,stopTape,exportWav,renderPads,setKit,kitLabel,audioState:()=>({context:live?.state||'none',kit:scene.kit,master:engine?.dry?.gain?.value??null})};
 })();

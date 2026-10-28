@@ -1,32 +1,24 @@
-# v0.1.7.1 — DUB Touch Fix
+# v0.1.8 — PLAYABLE SPACE (2026-10-28)
 
-- Fixed iPhone-sensitive DUB activation: direct pointerup handler with pointer capture.
-- Suppressed duplicate synthetic clicks; retained keyboard and accessibility click support.
-- Unlocked audio on pointerdown inside a trusted touch gesture.
-- Added visible pressed/recording feedback, clearer screen-reader state, >=44px touch height.
-- Cache-busted app/CSS/audio/icons scripts and versioned the PWA service worker to avoid stale JavaScript with a new UI.
-- All audio kits and other performance features remain unchanged.
+## Playable groove generation
+- **NEW (tap):** 10–16 beat events over two bars, with intentional rests and register separation.
+- **NEW (hold):** full/busy algorithm from v0.1.7 remains available.
+- Existing saved scenes load unchanged until edited; the mode follows the saved scene.
 
-# CHANGELOG
+## Live performance
+- Live pad sound is immediate and does not mutate the backing loop.
+- Dedicated accompaniment bus is softly ducked when the player taps, leaving the live sound unaffected.
+- TAPE renderer reconstructs foreground/background routing from captured role data.
 
-## v0.1.7 — LIVE JAM
+## Overdub and mutation
+- DUB gives priority to the player's own note at neighboring 16th positions in the same sound family, replaces competing notes, and limits density. It still commits at a loop boundary or on stop.
+- MUTATE rearranges a pattern rather than adding 3–14 new notes every press.
+- A moved MUTATE note is redirected to a free nearby slot instead of disappearing; repeated mutation is tested.
 
-### Added
-- Non-destructive LIVE JAM while LOOP runs; live taps do not modify the two-bar pattern.
-- An explicit **● DUB** button, with visible recording state and immediate sound plus 16th-note quantized capture.
-- Pending overdub staging to avoid same-cycle echo; automatic commit at the next cycle, or when DUB/LOOP is stopped.
-- Undo history for a DUB recording session, integrated with RESTORE long press.
-- BPM-aware, pad-group-specific HOLD REPEAT; repeat hits can be overdubbed.
-- Rabbits and LCD progress indicators now follow the audio loop's beat rather than a free-running animation clock.
+## Maintained
+- Five synthesis kits and their 80 timbres; 16 pads and unified icons; 3 dancing rabbits.
+- KEEP / RESTORE (and long-press undo), TAPE, LOOP WAV, English manual, PWA, legacy localStorage keys.
 
-### Fixed / preserved
-- Fixed previous-kit arrow: it now moves back one kit rather than two after adding the fifth kit.
-- Prior background behavior that silently appended live hits to a pattern during LOOP is replaced by an explicit toggle.
-- A playhead anchor keeps quantization aligned with the Web Audio clock even as the scheduler looks ahead.
-- Tempo changes reset the playhead and finish a recording before the change.
-- Preserves 5 kit synth voices, MUTATE audible variation, KEEP/RESTORE, WAV, TAPE, previous localStorage session keys, original sticker-style pads and compact phone layout.
-- p5.js 1.11.13 / Canvas fallback, no MIC or imported samples.
-
-### Tested
-- Chromium touch interactions, DUB/undo, mutate, TAPE and WAV export, offline audio voice-level checks, 320×568 / 375×667 / 390×740 / 430×800 CSS px layout.
-- Physical iPhone Safari and Home Screen PWA behavior remains untested.
+## Test coverage
+- Chromium: OPEN and FULL, 18 successive mutations, live-JAM preservation, DUB pointer/click, 80 voices, 44.1kHz stereo WAV and TAPE, 320×568 / 375×667 / 390×740 / 430×800 layouts.
+- Not verified on physical iPhone Safari.
