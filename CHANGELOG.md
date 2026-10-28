@@ -1,3 +1,10 @@
+# v0.1.9.1 — RABBIT FIT
+
+- Scaled pixel rabbits to the real LCD dimensions, preventing cropped feet and stretched heads on phones.
+- Removed the unexplained block pixel from the center rabbit and other stray head decorations.
+- Removed the redundant square recording marker inside the rabbit display; recording state is already shown in text.
+- Preserved all sound kits, patterns, buttons and audio paths.
+
 # v0.1.9 — BLANK BEAT
 
 - BLANK: clear pattern, start a silent two-bar clock and arm DUB automatically.

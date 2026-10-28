@@ -1,4 +1,4 @@
-/* WRONG NUMBER v0.1.9 — BLANK BEAT */
+/* WRONG NUMBER v0.1.9.1 — RABBIT FIT */
 (()=>{'use strict';
 const A=window.WrongAudio,I=window.WrongIcons; if(!A||!I){document.body.textContent='AUDIO ENGINE FAILED';return;}
 const $=id=>document.getElementById(id), N=32, STORE='wrong-number-session-0.1';
@@ -570,12 +570,17 @@ function paint(ctx,w,h){
  for(let x=7;x<w;x+=9)for(let y=5;y<h;y+=9)ctx.fillRect(x,y,1,1);
  ctx.globalAlpha=1;
  // Whole-body 8-bit rabbits: broad cheeks, tiny torsos, dancing feet and paws.
- const scale=2.45;
+ // Use the *displayed* canvas dimensions and one uniform pixel scale.
+ // Reserve space above both ears and below both feet, including the hop pose.
+ const scale=Math.max(.8,Math.min((h-18)/43,(w-42)/(3*27+2*30)));
  function bunny(n,pose,accident=false){
-  const sx=17+n*44,sy=5,step=pose%4,hop=step===1||step===3;
+  const sx=w*(.2+.3*n)-13.5*scale;
+  const sy=(h-38*scale)/2;
+  const step=pose%4,hop=step===1||step===3;
   // Everything is placed in sprite pixels, including the legs; no bottom clipping.
-  ctx.save();ctx.translate(Math.round(sx*scale),Math.round((sy+(hop?-2:0))*scale));
-  if(accident){ctx.translate(13*scale,27*scale);ctx.rotate(Math.PI/2);ctx.translate(-13*scale,-27*scale);}
+  ctx.save();ctx.translate(Math.round(sx),Math.round(sy+(hop?-2:0)*scale));
+  // A small sideways stumble remains inside the LCD; the old 90° rotation did not.
+  if(accident){ctx.translate(13*scale,23*scale);ctx.rotate(n%2?-.25:.25);ctx.translate(-13*scale,-23*scale);}
   const p=(x,y,w,h,col=dark)=>rectLocal(x,y,w,h,col);
   const rectLocal=(x,y,w,h,col)=>{ctx.fillStyle=col;ctx.fillRect(Math.round(x*scale),Math.round(y*scale),Math.round(w*scale),Math.round(h*scale));};
   const sway=step===3?1:step===1?-1:0;
@@ -603,9 +608,6 @@ function paint(ctx,w,h){
   p(7+sway,35,5,3);p(16+sway,35,5,3);
   if(step===2){p(6+sway,35,5,3);p(17+sway,33,5,3);}
   p(21+sway,31,3,3); // Tail.
-  if(n===0){p(19,10,4,3);p(22,9,4,3);p(22,11,1,2,inner);}
-  else if(n===1){p(12,9,3,2);p(14,10,2,2);}
-  else{p(21,22,1,1);}
   ctx.restore();
  }
  const cycleStep=isPlaying?((Math.floor((stateAt()-cycleAnchor)/stepSeconds())%N+N)%N):0;
@@ -624,18 +626,58 @@ function paint(ctx,w,h){
  for(let i=0;i<A.KIT_TITLES.length;i++){
   ctx.fillStyle=i===scene.kit?dark:inner;ctx.fillRect(w-13-(A.KIT_TITLES.length-i)*8,h-6,i===scene.kit?5:3,3);
  }
- if(dubArmed){ctx.fillStyle=dark;ctx.fillRect(151,4,12,5);ctx.fillStyle=light;ctx.fillRect(154,5,6,3);}
- if(glitch){ctx.fillStyle=medium;ctx.fillRect(155,8,7,2);ctx.fillRect(70,80,9,2);}
+ if(glitch){ctx.fillStyle=medium;ctx.fillRect(w*.22,h-15,9,2);ctx.fillRect(w*.77,h-12,5,2);}
+}
+// Both the local Canvas fallback and p5 render in measured CSS pixels.
+// This avoids horizontal stretching when the LCD's aspect ratio changes on iPhone.
+function displaySize(){
+ const view=$('display-view');
+ return {w:Math.max(1,Math.round(view.clientWidth)),h:Math.max(1,Math.round(view.clientHeight))};
 }
 let fallbackFrame=0;
-function startCanvasFallback(){const canvas=$('display-fallback'),context=canvas.getContext('2d');if(!context)return;let last=0;const frame=(now)=>{if(canvas.hidden)return;if(now-last>65){paint(context,320,100);last=now;}fallbackFrame=requestAnimationFrame(frame);};fallbackFrame=requestAnimationFrame(frame);}
+function startCanvasFallback(){
+ const canvas=$('display-fallback'),context=canvas.getContext('2d');
+ if(!context)return;
+ let last=0,oldW=0,oldH=0;
+ const frame=now=>{
+  if(canvas.hidden)return;
+  if(now-last>65){
+   const {w,h}=displaySize(),dpr=Math.min(2,window.devicePixelRatio||1);
+   if(w!==oldW||h!==oldH){
+    canvas.width=Math.round(w*dpr);canvas.height=Math.round(h*dpr);
+    context.setTransform(dpr,0,0,dpr,0,0);
+    oldW=w;oldH=h;
+   }
+   paint(context,w,h);last=now;
+  }
+  fallbackFrame=requestAnimationFrame(frame);
+ };
+ fallbackFrame=requestAnimationFrame(frame);
+}
 function attemptP5(){
  const script=document.createElement('script');script.src='https://cdn.jsdelivr.net/npm/p5@1.11.13/lib/p5.min.js';script.async=true;
- script.onload=()=>{if(!window.p5)return;try{new p5(p=>{p.setup=()=>{const canvas=p.createCanvas(320,100);canvas.parent('p5-container');p.pixelDensity(1);p.frameRate(15);$('display-fallback').hidden=true;cancelAnimationFrame(fallbackFrame);};p.draw=()=>paint(p.drawingContext,320,100);});}catch(err){console.warn('p5 fallback',err);$('display-fallback').hidden=false;startCanvasFallback();}};
+ script.onload=()=>{
+  if(!window.p5)return;
+  try{
+   new p5(p=>{
+    p.setup=()=>{
+     const {w,h}=displaySize();
+     const canvas=p.createCanvas(w,h);canvas.parent('p5-container');
+     p.pixelDensity(Math.min(2,window.devicePixelRatio||1));p.frameRate(15);
+     $('display-fallback').hidden=true;cancelAnimationFrame(fallbackFrame);
+    };
+    p.draw=()=>{
+     const {w,h}=displaySize();
+     if(p.width!==w||p.height!==h)p.resizeCanvas(w,h);
+     paint(p.drawingContext,w,h);
+    };
+   });
+  }catch(err){console.warn('p5 fallback',err);$('display-fallback').hidden=false;startCanvasFallback();}
+ };
  script.onerror=()=>console.info('p5 CDN unavailable; internal Canvas fallback active');
  document.head.appendChild(script);
 }
-function init(){renderPads();bindControls();updateText();startCanvasFallback();attemptP5();if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('./sw.js?v=0.1.9', {updateViaCache:'none'}).catch(err=>console.warn('SW:',err));}
+function init(){renderPads();bindControls();updateText();startCanvasFallback();attemptP5();if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('./sw.js?v=0.1.9.1', {updateViaCache:'none'}).catch(err=>console.warn('SW:',err));}
 init();
 window.WrongNumberDebug={blank,flashNew,balancePattern,generateOpen,generateFull,getScene:()=>deepCopy(scene),isPlaying:()=>isPlaying,isRecording:()=>!!tape,isDubArmed:()=>dubArmed,pendingDub:()=>deepCopy(pendingDub),setDub,commitDub,snapToStep,cycleAnchor:()=>cycleAnchor,visualState:()=>({blankUntil,newUntil,glitchUntil}),playPad,captureRecent,mutate,fresh,undo,startLoop,stopLoop,startTape,stopTape,exportWav,renderPads,setKit,kitLabel,audioState:()=>({context:live?.state||'none',kit:scene.kit,master:engine?.dry?.gain?.value??null})};
 })();
