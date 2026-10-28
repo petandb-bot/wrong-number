@@ -1,26 +1,23 @@
 # CHANGELOG
 
-## v0.1.6 — ROTTEN CARROT
+## v0.1.7 — LIVE JAM
 
-### Fixed
-- MUTATE from STOP now starts the mutated loop, rather than quietly editing an inactive pattern.
-- Strengthened note-position and instrument replacement for audible, repeatable changes even on sparse patterns.
-- Long-press MUTATE on touch devices no longer depends on an iOS-generated click following the press; keyboard click remains supported.
-- The MUTATE status provides an event count and the button briefly responds visually.
+### Added
+- Non-destructive LIVE JAM while LOOP runs; live taps do not modify the two-bar pattern.
+- An explicit **● DUB** button, with visible recording state and immediate sound plus 16th-note quantized capture.
+- Pending overdub staging to avoid same-cycle echo; automatic commit at the next cycle, or when DUB/LOOP is stopped.
+- Undo history for a DUB recording session, integrated with RESTORE long press.
+- BPM-aware, pad-group-specific HOLD REPEAT; repeat hits can be overdubbed.
+- Rabbits and LCD progress indicators now follow the audio loop's beat rather than a free-running animation clock.
 
-### Improved
-- GHOST OFFICE is replaced by ROTTEN CARROT (sour, rubbery, unsettling sound palette).
-- Added WORM PARADE as a fifth, deliberately weird kit.
-- Replaced previous rabbit silhouettes with larger chibi-style pixel rabbits using contrasting interiors, faces, different personalities and stepwise poses.
-- Updated PWA icons to reflect the new characters; refreshed the offline cache.
-- Updated the English MANUAL and version number.
+### Fixed / preserved
+- Fixed previous-kit arrow: it now moves back one kit rather than two after adding the fifth kit.
+- Prior background behavior that silently appended live hits to a pattern during LOOP is replaced by an explicit toggle.
+- A playhead anchor keeps quantization aligned with the Web Audio clock even as the scheduler looks ahead.
+- Tempo changes reset the playhead and finish a recording before the change.
+- Preserves 5 kit synth voices, MUTATE audible variation, KEEP/RESTORE, WAV, TAPE, previous localStorage session keys, original sticker-style pads and compact phone layout.
+- p5.js 1.11.13 / Canvas fallback, no MIC or imported samples.
 
-### Preserved
-- Original CANDY instruments and TOY / SUGAR signal chains.
-- 16-pad controls, loop timing, KEEP/RESTORE/undo, TAPE and WAV output.
-- Saved patterns and earlier session keys (kit #4 changes from GHOST OFFICE to ROTTEN CARROT by design).
-
-### Validation
-- Chromium tests: repeated short/long mutations, STOP → MUTATE auto-play, 5-kit switching, KEEP/RESTORE, TAPE and WAV export, and 320×568 through 430×800 viewports.
-- Offline Web Audio: 80 voices audible and no clipping beyond test limit.
-- iPhone Safari and Home Screen real-device behavior remains unverified.
+### Tested
+- Chromium touch interactions, DUB/undo, mutate, TAPE and WAV export, offline audio voice-level checks, 320×568 / 375×667 / 390×740 / 430×800 CSS px layout.
+- Physical iPhone Safari and Home Screen PWA behavior remains untested.

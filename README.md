@@ -1,68 +1,55 @@
-# WRONG NUMBER v0.1.6 — ROTTEN CARROT
+# WRONG NUMBER v0.1.7 — LIVE JAM
 
-A small pink portable instrument for iPhone and desktop. 16 colorful pads, five fully synthesized sound kits, a three-rabbit Game & Watch-style LCD, immediate LOOP/MUTATE, KEEP/RESTORE, TAPE and two-bar WAV export.
+A tiny candy-poison portable instrument for phones and desktop browsers. Five synthesized sound kits, 16 illustrated performance pads, three dancing pixel rabbits, live jam, 16th-note overdubbing, mutate, snapshots, tape and loop WAV export.
 
-## Publish with GitHub Pages
+## Publish on GitHub Pages
 
-1. Unzip this archive and upload **the contents** of `wrong-number-v0.1.6/` into the root of your existing GitHub repository, replacing earlier files.
-2. Use **Settings → Pages → Deploy from a branch → main → /(root)**.
-3. Open the HTTPS site in iPhone Safari. Use **Share → Add to Home Screen** if desired.
-4. If an old installed app is still loaded, reload Safari and close/reopen the Home Screen app. The service worker cache name is updated to `wrong-number-v0.1.6`.
+1. Unzip `WRONG_NUMBER_v0.1.7_LIVE_JAM_GitHub_Pages.zip`.
+2. Upload **all files and folders inside** `wrong-number-v0.1.7/` to the root of your existing GitHub repository. Replace old files.
+3. In GitHub **Settings → Pages**, select **Deploy from a branch**, **main**, **/(root)** if you have not enabled Pages already.
+4. Open the HTTPS URL in Safari. To use it like an app, select **Share → Add to Home Screen**.
+5. If your previous PWA remains visible, close and reopen it. The service worker has a new versioned cache (`wrong-number-v0.1.7`).
 
-No server, build tools, audio uploads or accounts are required. `p5.js@1.11.13` is loaded from a CDN for the LCD when online; a locally implemented Canvas fallback keeps the screen functional offline. The sound engine uses the Web Audio API and does not need `p5.sound`.
+This is a static, local-only instrument. No microphone permissions, uploads, login or build tools are needed. The audio engine uses Web Audio. p5.js 1.11.13 paints the display if its CDN is available, with an internal Canvas fallback offline.
 
-## How to play
+## PLAY / LIVE JAM / DUB
 
-- **PADS**: Tap 01–16 to trigger sounds. Repeated touches create different attacks; holding a pad produces short repeated fragments.
-- **SOUND KIT**: Use the arrows or the kit-name button to switch between CANDY KIT, TOY MALFUNCTION, SUGAR POISON, ROTTEN CARROT and WORM PARADE.
-- **LOOP**: Capture a recent gesture; when no gestures exist, generate a two-bar beat. Tap again to stop. Playing pads during a loop adds quantized events to the pattern.
-- **MUTATE**: Tap to change audible notes, timing and accents. If no loop is playing, MUTATE starts it automatically. Hold at least 0.6 seconds for a heavier change. A brief status message reports the new note count. On touchscreen, the operation runs from `pointerup` rather than depending on a long-press click event.
-- **KEEP**: Save a snapshot. **RESTORE**: Recall the saved snapshot; long-press for the previous pattern (up to eight changes).
-- **NEW**: Generate a new beat in the selected kit.
-- **TAPE**: Record live playing and the running loop for up to 30 seconds; export a WAV with release tail. The kit selected for each recorded note is preserved in export.
-- **WAV**: Render a seamless two-bar PCM WAV (44.1 kHz, 16-bit stereo).
-- **− / +**: Change tempo. **Desktop keys**: 1–4, QWER, ASDF, ZXCV.
+- **PLAY:** Tap one of the 16 pads for immediate sound, tap rapidly for varying attacks, or hold for tempo-related repeating fragments. Playing multiple pads at once is supported.
+- **LOOP:** Starts a two-bar loop using the last free performance; if none is available, starts a generated beat. Tap LOOP again to stop.
+- **JAM (normal):** While LOOP is playing, all pad taps are live only. They **never modify the underlying loop**. You can experiment without damaging the pattern.
+- **● DUB:** Tap the fourth large button to arm overdubbing. This also starts LOOP if it was stopped. Tap or hold pads to add hits to the **next pass** of the pattern. Live hits sound immediately; the *recorded positions* are rounded to the nearest 16th note. Tap ● DUB again to finish and save pending notes. Tapping LOOP to stop also saves pending notes.
+- **HOLD REPEAT:** Press and hold any pad. After a short intentional hold, the pad produces repeated fragments paced according to BPM and pad group. Holding during DUB can record these fragments. Release to stop.
+- **MUTATE:** Evolves a pattern and starts it if stopped. Hold MUTATE for a stronger mutation. When DUB is active, MUTATE finishes that overdub before transforming the pattern.
+- **KEEP:** Saves the current pattern and kit. **RESTORE:** Recalls it. Holding RESTORE undoes previous mutations, new grooves and overdubs, up to eight snapshots.
+- **NEW:** Generates a kit-aware two-bar groove. **TAPE:** Records the loop plus live taps as performed for up to 30 seconds, then renders WAV. **↓ WAV:** Exports the current two-bar pattern as seamless stereo 44.1kHz/16-bit PCM. **− / +:** Changes BPM.
+- **KITS:** CANDY KIT / TOY MALFUNCTION / SUGAR POISON / ROTTEN CARROT / WORM PARADE. Tap the kit name or arrows to change the sound world. The loop uses whichever kit is currently selected; TAPE preserves the kit at each performed hit.
+- **DESKTOP KEYS:** `1234`, `QWER`, `ASDF`, `ZXCV` for the 16 pads. Keyboard holds repeat too.
 
-## Sound kits
+### Example session
 
-| Kit | Character |
-| --- | --- |
-| CANDY KIT | Original v0.1.5 synth instruments, kept unchanged |
-| TOY MALFUNCTION | Elastic FM taps and toy circuits |
-| SUGAR POISON | Cold resonances and unstable glass-like tones |
-| ROTTEN CARROT | Sour rubber, squelching lows, chittering and lopsided percussion; replaces GHOST OFFICE |
-| WORM PARADE | New fifth kit: crooked chirps, jumpy digital percussion and silly unstable intervals |
+1. Tap **NEW**, then **LOOP** (or just **LOOP** with an empty scene).
+2. Tap extra sounds freely while the loop runs — this is **JAM**.
+3. Tap **● DUB**. Play a few extra taps or hold a pad for a rhythmic roll.
+4. Tap **● DUB** again. Your recorded additions loop automatically.
+5. Press **KEEP**, explore **MUTATE**, and use **RESTORE** if needed.
+6. Tap **TAPE** to record improvisation, or **↓ WAV** to export the loop.
 
-Kit index 3, formerly GHOST OFFICE, now plays ROTTEN CARROT if loaded from an old session. All other kit indices and saved events remain compatible. This changes only that kit's timbre by design; the saved pattern data is not deleted.
+## Technical design
 
-## Graphics and device UI
+- The live sound fires instantly (no audible quantization latency). Quantization only affects recording.
+- DUB notes are staged until the next cycle boundary to prevent a second hit on the current pass; switching DUB off flushes any remaining notes into the saved pattern.
+- Duplicate hits from the same pad on a grid step are merged to avoid digital clipping. The stored pattern has a 64-event limit; important low-frequency anchors are prioritized when full.
+- Loop timing uses `AudioContext.currentTime` and a 25ms scheduler with lookahead. Rabbit dance phase follows the same beat clock while looping.
+- Changing tempo while DUB is armed finishes the DUB first and restarts the scheduled playhead. The short restart is intentional to avoid a timing mismatch.
+- TAPE records the scheduled voices *and* manual live voices. Loop WAV renders the current loop events, not temporary JAM notes. The file generator works without a server.
+- Previous session and KEEP localStorage keys are preserved. Existing patterns still load. No previously stored samples are deleted, though MIC/FILE/SAMPLE are not available in this version.
 
-The three rabbits are redrawn from local, hand-coded pixel graphics with different faces and 2–4 discrete poses. LOOP, MUTATE, KEEP and NEW affect their behavior. There is no waveform display. The 16 pad icons retain their unified vector illustrations. The layout remains single-screen oriented, with no horizontal overflow at tested sizes.
+## Test and support
 
-## Technical changes and limitations
+Chromium desktop automation checks LIVE JAM isolation, armed DUB, quantization, undo, mutate, kit audio, TAPE/WAV and 320×568 through 430×800 mobile viewports. **No physical iPhone Safari/Home Screen testing was possible here.** The audio should be played in the foreground; iOS may suspend background audio. Avoid very loud headphones while testing an unfamiliar sound kit.
 
-- MUTATE previously wrote new pattern data without starting playback from STOP; now it starts playback so the change is audible immediately. Mutations alter event placement and pad selection rather than only random seeds or DSP parameters.
-- The MUTATE button uses explicit pointer-up handling and suppression of duplicate click events, plus a keyboard-click fallback.
-- LOOP, KEEP, RESTORE, NEW, TAPE, offline WAV rendering, localStorage session persistence and the four sound groups remain intact.
-- MIC / FILE / imported SAMPLE playback remain deliberately disabled; old imported audio data is **not erased**.
-- Browser tests validate 80 generated voices, repeated MUTATE, long-press, WAV export, TAPE and mobile layouts. These are not substitutes for real iPhone Safari and home-screen testing. iOS audio routing, touch latency and system playback volume have **not** been tested on hardware.
+The short English manual is also available from **MANUAL / HOW TO PLAY** beneath the instrument.
 
-## Files
+Files: `index.html`, `style.css`, `app.js`, `audio.js`, `icons.js`, `sw.js`, `manifest.webmanifest`, `assets/`, `tests/`.
 
-- `index.html`: UI, accessible controls, short English manual
-- `style.css`: compact colored enclosure and responsive touch controls
-- `app.js`: live scheduler, generation, mutation, rabbits, recording, WAV export
-- `audio.js`: Web Audio instruments and WAV encoder
-- `icons.js`: unified pad icons
-- `sw.js`, `manifest.webmanifest`, `assets/`: installable PWA
-- `tests/regression_016.py`: Chromium UI/gesture/export checks
-- `tests/audio_016.py`: Web Audio voice-level checks
-
-Run tests (if Python Playwright, Chromium and their dependencies are installed):
-
-```bash
-python tests/regression_016.py
-python tests/audio_016.py
-```
-
-For local use, serve the folder over `localhost` instead of opening `index.html` as a file.
+For local preview, serve this directory over HTTP (`python -m http.server 8000`) and open `http://localhost:8000`.
