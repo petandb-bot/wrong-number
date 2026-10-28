@@ -11,8 +11,8 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="apple-touch-icon" href="assets/icon-180.png">
   <link rel="icon" href="assets/icon-192.png">
-  <link rel="stylesheet" href="style.css">
-  <title>WRONG NUMBER — LIVE JAM</title>
+  <link rel="stylesheet" href="style.css?v=0.1.7.1">
+  <title>WRONG NUMBER — LIVE JAM (v0.1.7.1)</title>
 </head>
 <body>
   <main class="shell" aria-label="WRONG NUMBER pocket instrument">
@@ -44,7 +44,7 @@
       <button id="btn-loop" class="command command-loop" aria-pressed="false"><strong>LOOP</strong><small>CAPTURE / STOP</small></button>
       <button id="btn-mutate" class="command command-mutate"><strong>MUTATE</strong><small>EVOLVE</small></button>
       <button id="btn-keep" class="command command-keep"><strong>KEEP</strong><small>SNAPSHOT</small></button>
-      <button id="btn-dub" class="command command-dub" aria-pressed="false" title="Tap to record your live pad performance into the loop"><strong>● DUB</strong><small>OVERDUB</small></button>
+      <button type="button" id="btn-dub" class="command command-dub" aria-pressed="false" aria-label="Start overdub recording" title="Tap to record your live pad performance into the loop"><strong>● DUB</strong><small>OVERDUB</small></button>
     </section>
     <section class="bottom-strip" aria-label="Recording and pattern tools">
       <button id="btn-restore" class="utility utility-restore" title="Hold to undo the last mutation">↶ RESTORE</button>
@@ -59,7 +59,7 @@
       <a id="download-link" href="#" download="wrong-number-loop.wav" hidden>DOWNLOAD WAV</a>
       <button id="btn-share" hidden>SHARE / SAVE TO FILES</button>
     </div>
-    <footer class="footer-line"><span id="live-message">CANDY KIT / READY</span><span>v0.1.7 ✳</span></footer>
+    <footer class="footer-line"><span id="live-message">CANDY KIT / READY</span><span>v0.1.7.1 ✳</span></footer>
   </main>
   <details class="help">
     <summary>MANUAL / HOW TO PLAY</summary>
@@ -76,8 +76,8 @@
       <p><b>NOTE:</b> MIC and FILE have been removed in this version to avoid unstable recording behavior on mobile browsers. Your old patterns still load; previous imported sample banks are not used or erased by this app. All sound is generated locally. Start at a comfortable listening volume.</p>
     </div>
   </details>
-  <script src="audio.js" defer></script>
-  <script src="icons.js" defer></script>
-  <script src="app.js" defer></script>
+  <script src="audio.js?v=0.1.7.1" defer></script>
+  <script src="icons.js?v=0.1.7.1" defer></script>
+  <script src="app.js?v=0.1.7.1" defer></script>
 </body>
 </html>

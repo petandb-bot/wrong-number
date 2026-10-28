@@ -1,4 +1,4 @@
-/* WRONG NUMBER v0.1.7 — LIVE JAM
+/* WRONG NUMBER v0.1.7.1 — LIVE JAM / DUB touch fix
  * Timing: Web Audio's currentTime, with a 25ms look-ahead scheduler.
  * Screen: p5.js v1.11.13 when available, local Canvas fallback offline.
  * Playback: all synthesis and mutations remain local to the browser.
@@ -49,7 +49,8 @@ function updateText(){
  $('beat-readout').textContent=`${scene.bpm} BPM · ${isPlaying?`${1+Math.floor(visualBeat/16)}:${String(1+Math.floor(visualBeat%16/4)).padStart(2,'0')}`:'--:--'}`;
  $('btn-loop').setAttribute('aria-pressed',String(isPlaying));
  $('btn-dub').setAttribute('aria-pressed',String(dubArmed));
- $('btn-dub').querySelector('small').textContent=dubArmed?'RECORDING':'OVERDUB';
+ $('btn-dub').setAttribute('aria-label',dubArmed?'Stop overdub recording':'Start overdub recording');
+ $('btn-dub').querySelector('small').textContent=dubArmed?'● RECORDING':'OVERDUB';
  $('live-message').textContent=`${dubArmed?'● DUB +'+pendingDub.length:isPlaying?'JAM':'READY'} / ${A.KIT_SHORT[scene.kit]} / ${scene.events.length.toString().padStart(2,'0')} NOTES`; 
  updateKitUi();
 }
@@ -303,7 +304,44 @@ function bindControls(){
  $('kit-prev').addEventListener('click',()=>setKit(scene.kit-1));
  $('kit-next').addEventListener('click',()=>setKit(scene.kit+1));
  $('btn-loop').addEventListener('click',()=>isPlaying?stopLoop():startLoop());
- $('btn-dub').addEventListener('click',()=>setDub(!dubArmed));
+ // DUB must not rely on synthesized click on mobile Safari.
+ // Trigger on pointerup (the same path as MUTATE), capture a pointer that
+ // slips onto the label while the finger is down, and suppress its follow-up
+ // synthesized click. Keep click for keyboard / assistive technology.
+ const dubButton=$('btn-dub');
+ let dubPointer=null, lastDubPointerAction=-10000;
+ const clearDubPointer=()=>{dubPointer=null;dubButton.classList.remove('is-touching');};
+ dubButton.addEventListener('contextmenu',event=>event.preventDefault());
+ dubButton.addEventListener('pointerdown',event=>{
+  if(event.pointerType==='mouse'&&event.button!==0)return;
+  if(dubPointer!==null)return; // Ignore additional fingers on the same button.
+  dubPointer={id:event.pointerId,x:event.clientX,y:event.clientY};
+  dubButton.classList.add('is-touching');
+  try{dubButton.setPointerCapture(event.pointerId);}catch{}
+  // Request audio while iOS has a direct trusted user activation.
+  // Playing is only started on release so accidental scrolls do not arm DUB.
+  ensureAudio();
+ });
+ dubButton.addEventListener('pointerup',event=>{
+  if(!dubPointer||event.pointerId!==dubPointer.id)return;
+  const moved=Math.hypot(event.clientX-dubPointer.x,event.clientY-dubPointer.y)>38;
+  clearDubPointer();
+  lastDubPointerAction=performance.now();
+  if(!moved)setDub(!dubArmed);
+ });
+ dubButton.addEventListener('pointercancel',event=>{
+  if(dubPointer&&event.pointerId===dubPointer.id){clearDubPointer();lastDubPointerAction=performance.now();}
+ });
+ dubButton.addEventListener('lostpointercapture',()=>{
+  // pointerup already handled the tap; lost capture merely clears stale visuals.
+  clearDubPointer();
+ });
+ dubButton.addEventListener('click',event=>{
+  if(event.detail!==0 && performance.now()-lastDubPointerAction<650){event.preventDefault();return;}
+  // Keyboard activation and accessibility-generated clicks do not require
+  // pointerdown/pointerup, and remain supported.
+  setDub(!dubArmed);
+ });
  $('tempo-down').addEventListener('click',()=>tempo(-2));$('tempo-up').addEventListener('click',()=>tempo(2));
  $('btn-keep').addEventListener('click',keep);$('btn-new').addEventListener('click',fresh);
  const restoreButton=$('btn-restore');let restoreDown=0,lastRestorePointer=0;
@@ -496,7 +534,7 @@ function attemptP5(){
  script.onerror=()=>console.info('p5 CDN unavailable; internal Canvas fallback active');
  document.head.appendChild(script);
 }
-function init(){renderPads();bindControls();updateText();startCanvasFallback();attemptP5();if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('./sw.js').catch(err=>console.warn('SW:',err));}
+function init(){renderPads();bindControls();updateText();startCanvasFallback();attemptP5();if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('./sw.js?v=0.1.7.1', {updateViaCache:'none'}).catch(err=>console.warn('SW:',err));}
 init();
 window.WrongNumberDebug={getScene:()=>deepCopy(scene),isPlaying:()=>isPlaying,isRecording:()=>!!tape,isDubArmed:()=>dubArmed,pendingDub:()=>deepCopy(pendingDub),setDub,commitDub,snapToStep,cycleAnchor:()=>cycleAnchor,playPad,captureRecent,mutate,fresh,undo,startLoop,stopLoop,startTape,stopTape,exportWav,renderPads,setKit,kitLabel,audioState:()=>({context:live?.state||'none',kit:scene.kit,master:engine?.dry?.gain?.value??null})};
 })();

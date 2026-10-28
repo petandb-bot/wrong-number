@@ -1,4 +1,4 @@
-/* WRONG NUMBER v0.1.7 — LIVE JAM
+/* WRONG NUMBER v0.1.7.1 — LIVE JAM / DUB fix
    Pop-toy interface; compact play surface, iPhone-first; no emoji-dependent icons. */
 :root{font-family:ui-rounded,system-ui,-apple-system,"Arial Rounded MT Bold",sans-serif;color:#30113b;background:#301036;font-synthesis:none;-webkit-text-size-adjust:100%}
 *{box-sizing:border-box}html{min-height:100%;background:#301036}body{margin:0;min-height:100dvh;padding:calc(env(safe-area-inset-top) + 6px) 8px calc(env(safe-area-inset-bottom) + 12px);background:radial-gradient(ellipse at 50% 0%,#6f224f,#2c113b 64%);touch-action:manipulation;overscroll-behavior-y:contain}
@@ -53,3 +53,10 @@ button{font:inherit;cursor:pointer;-webkit-tap-highlight-color:transparent;touch
 .command-mutate.is-mutating{background:#dfff61;box-shadow:inset 2px 2px 0 #ffffffa8,0 2px 0 #84175f;transform:translateY(2px)}
 
 @media(prefers-reduced-motion:reduce){.command-dub[aria-pressed=true] strong{animation:none}}
+
+/* DUB: consistent direct hit area on iOS; no nested label can steal the tap. */
+.command-dub{touch-action:manipulation;-webkit-touch-callout:none;position:relative;min-height:44px}
+.command-dub>*{pointer-events:none}
+.command-dub.is-touching{transform:translateY(2px);filter:brightness(1.09)}
+.command-dub[aria-pressed=true]{outline:2px solid #3e1747;outline-offset:1px}
+.command-dub[aria-pressed=true] small{letter-spacing:-.3px}

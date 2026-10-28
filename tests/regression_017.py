@@ -6,7 +6,7 @@ ROOT=Path(__file__).resolve().parents[1]
 def setup(browser,w=390,h=740):
     ctx=browser.new_context(viewport={'width':w,'height':h},is_mobile=True,has_touch=True,service_workers='block',accept_downloads=True)
     pg=ctx.new_page();errs=[];pg.on('pageerror',lambda e:errs.append(str(e)))
-    html=re.sub(r'<script src="(?:audio|icons|app)\.js" defer></script>','',(ROOT/'index.html').read_text())
+    html=re.sub(r'<script src="(?:audio|icons|app)\.js(?:\?v=[^"]+)?" defer></script>','',(ROOT/'index.html').read_text())
     pg.set_content(html)
     pg.add_style_tag(path=str(ROOT/'style.css'))
     for src in ['audio.js','icons.js','app.js']:pg.add_script_tag(path=str(ROOT/src))

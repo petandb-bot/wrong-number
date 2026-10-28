@@ -1,14 +1,14 @@
-# WRONG NUMBER v0.1.7 — LIVE JAM
+# WRONG NUMBER v0.1.7.1 — LIVE JAM / DUB FIX
 
 A tiny candy-poison portable instrument for phones and desktop browsers. Five synthesized sound kits, 16 illustrated performance pads, three dancing pixel rabbits, live jam, 16th-note overdubbing, mutate, snapshots, tape and loop WAV export.
 
 ## Publish on GitHub Pages
 
-1. Unzip `WRONG_NUMBER_v0.1.7_LIVE_JAM_GitHub_Pages.zip`.
-2. Upload **all files and folders inside** `wrong-number-v0.1.7/` to the root of your existing GitHub repository. Replace old files.
+1. Unzip `WRONG_NUMBER_v0.1.7.1_DUB_FIX_GitHub_Pages.zip`.
+2. Upload **all files and folders inside** `wrong-number-v0.1.7.1/` to the root of your existing GitHub repository. Replace old files.
 3. In GitHub **Settings → Pages**, select **Deploy from a branch**, **main**, **/(root)** if you have not enabled Pages already.
 4. Open the HTTPS URL in Safari. To use it like an app, select **Share → Add to Home Screen**.
-5. If your previous PWA remains visible, close and reopen it. The service worker has a new versioned cache (`wrong-number-v0.1.7`).
+5. If your previous PWA remains visible, close and reopen it. The service worker has a new versioned cache (`wrong-number-v0.1.7.1`).
 
 This is a static, local-only instrument. No microphone permissions, uploads, login or build tools are needed. The audio engine uses Web Audio. p5.js 1.11.13 paints the display if its CDN is available, with an internal Canvas fallback offline.
 
@@ -53,3 +53,16 @@ The short English manual is also available from **MANUAL / HOW TO PLAY** beneath
 Files: `index.html`, `style.css`, `app.js`, `audio.js`, `icons.js`, `sw.js`, `manifest.webmanifest`, `assets/`, `tests/`.
 
 For local preview, serve this directory over HTTP (`python -m http.server 8000`) and open `http://localhost:8000`.
+
+## v0.1.7.1 — iPhone DUB reliability patch
+
+- The DUB button now switches its state directly from `pointerup`, instead of waiting for a synthesized `click`. As with MUTATE, keyboard and accessibility clicks remain supported.
+- The touch is captured, a drag or canceled touch does not start recording, and the duplicate click is suppressed.
+- On the initial touch down, AudioContext is unlocked within the user's gesture so that a stopped loop can be started reliably.
+- DUB explicitly reports **● RECORDING** while enabled; a second press saves the pending notes and returns to JAM.
+- The PWA cache and the page's CSS/JavaScript URLs are versioned to prevent stale cross-version mixes after a GitHub Pages deploy.
+- This changes neither the five synthesis kits nor the loop / mutate / tape / WAV engines.
+
+If the installed iPhone home-screen app still looks like v0.1.7, open your GitHub Pages URL in Safari while online, refresh it, close the home-screen app fully, and launch it again.
+
+Automated Chromium mobile emulation tests cover pointer/touch, synthesized-click suppression, keyboard and cancellation. iPhone Safari hardware was not available for testing.

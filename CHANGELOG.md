@@ -1,3 +1,12 @@
+# v0.1.7.1 — DUB Touch Fix
+
+- Fixed iPhone-sensitive DUB activation: direct pointerup handler with pointer capture.
+- Suppressed duplicate synthetic clicks; retained keyboard and accessibility click support.
+- Unlocked audio on pointerdown inside a trusted touch gesture.
+- Added visible pressed/recording feedback, clearer screen-reader state, >=44px touch height.
+- Cache-busted app/CSS/audio/icons scripts and versioned the PWA service worker to avoid stale JavaScript with a new UI.
+- All audio kits and other performance features remain unchanged.
+
 # CHANGELOG
 
 ## v0.1.7 — LIVE JAM
