@@ -5,3 +5,58 @@
 
 /* v0.1.1: tape button uses the existing bottom strip, no new panel. */
 .bottom-left{display:flex;gap:10px;align-items:center;min-width:0}.utility-tape{color:#c7d8b0;border-bottom-color:#88a17c;min-width:43px}.utility-tape.is-recording{color:#f1a99c;border-bottom-color:#c47865;font-variant-numeric:tabular-nums}.utility:disabled{opacity:.5;cursor:wait}@media(max-width:360px){.bottom-left,.bottom-right{gap:6px}.utility{font-size:9px}}
+
+/* v0.1.2 — SOFT HARDWARE: candy enamel, a molded shell, working controls.
+   The sound engine / pad layout / transport remain deliberately familiar. */
+:root{color:#453c55;background:#e9cfcb}
+html{background:#e9cfcb}
+body{color:#463b53;background:radial-gradient(ellipse at 15% 12%,#fff3d3 0%,transparent 46%),radial-gradient(ellipse at 80% 76%,#d8c9e9 0%,transparent 55%),linear-gradient(125deg,#f5d9cf 0%,#e5d6d7 45%,#d1c5d9 100%);min-height:100vh}
+button:focus-visible,a:focus-visible,summary:focus-visible{outline:3px solid #6852a1;outline-offset:2px}
+.shell{position:relative;isolation:isolate;border-radius:29px 29px 36px 36px;background:linear-gradient(139deg,#f9ecca 0%,#f5d9be 36%,#f2c4be 81%,#e7b5b9 100%);border:2px solid #ffecca;box-shadow:inset 3px 4px 0 #fff6e3,inset -4px -6px 0 #d294a7,0 4px 0 #b98c9e,0 20px 50px #65547254;overflow:hidden;padding:18px 19px 15px}
+.shell::before,.shell::after{content:"";position:absolute;width:7px;height:7px;border-radius:50%;background:#b1a0aa;border:2px solid #fce9dc;box-shadow:inset 1px 1px 1px #786e89,0 1px 2px #7b556455;z-index:0;pointer-events:none}
+.shell::before{top:53px;left:7px}.shell::after{top:53px;right:7px}
+.shell-topline{color:#6a597a;font-size:11px;margin:0 4px 12px;letter-spacing:1.3px;font-weight:900}
+.shell-topline span:nth-child(2){font-size:8px;letter-spacing:.6px;color:#8c677a}
+.brand-badge{padding:4px 6px;border-radius:5px;color:#fff9e4;background:#9e83aa;box-shadow:0 2px 0 #715778}
+.power-led{background:#fb8c74;border-color:#ffe4ad;box-shadow:0 0 0 3px #e4a3a66b,0 0 11px #fa896c}
+.screen-panel{padding:12px;background:linear-gradient(155deg,#a3a0bd,#7d789f);border:1px solid #777097;border-radius:23px 23px 26px 26px;box-shadow:inset 2px 3px 1px #d3c2de,inset -2px -4px 2px #5f587e,0 4px 0 #dcabb0}
+.lcd{background:#c7dfba;color:#365740;border:2px solid #728f81;border-radius:9px;padding:10px 12px 8px;box-shadow:inset 0 1px 12px #526e5463,inset 0 0 50px #e4f3bb45,0 1px 0 #dcd9ed}
+.lcd-top,.lcd-bottom{color:#3c6149}.lcd-top{font-size:11px}
+.transport-head{color:#766279;font-weight:850;margin:14px 2px 9px;font-size:9px}
+.tempo{gap:8px}.tempo button{border-color:#bca5c1;background:linear-gradient(#e9d6f2,#cdb8df);color:#584978;box-shadow:0 3px 0 #aa92b3;border-radius:7px}.tempo span{color:#61506b}.tempo small{color:#8a7485}
+.input-strip{display:flex;justify-content:space-between;align-items:center;gap:9px;background:#fff5e7a9;border:1px solid #edd2c0;border-radius:12px;padding:8px 9px;margin:0 0 11px;box-shadow:inset 0 1px 0 #fffaf4,0 2px 1px #d6b4a560}
+.source-wrap{min-width:0;display:flex;align-items:center;gap:8px}
+.source-label{font-size:9px;font-weight:900;letter-spacing:.05em;color:#806d85;white-space:nowrap}
+.source-button{font-size:10px;font-weight:900;letter-spacing:.035em;padding:8px 9px;border:1px solid #bfb3d7;border-bottom:3px solid #9680b1;border-radius:7px;background:linear-gradient(#e6def7,#d0c3e7);color:#604d83;white-space:nowrap}
+.source-button.is-sample{background:linear-gradient(#c9ead6,#a9d7c8);border-color:#91bdaa;border-bottom-color:#70a896;color:#305f59}
+.source-dot{font-size:7px;margin-left:3px;color:#f0858e}
+.source-button.is-sample .source-dot{color:#408b7a}
+.input-controls{display:flex;gap:6px;flex-shrink:0}
+.input-button{font-size:10px;font-weight:900;letter-spacing:.035em;padding:9px 10px;border:1px solid #e5a7a2;border-bottom:3px solid #c68b96;border-radius:7px;background:linear-gradient(#ffc6af,#f5a9a3);color:#794856;min-width:52px;white-space:nowrap}
+#btn-file{background:linear-gradient(#c7dce7,#a9cedc);border-color:#a3c5d5;border-bottom-color:#7ba2b9;color:#3d617c}
+#btn-mic.is-recording{background:linear-gradient(#f3a098,#dc777e);color:#fff8ec;box-shadow:0 0 0 3px #f1a69a76}
+.input-button:disabled,.source-button:disabled{opacity:.54}
+.pads{gap:10px}.pad{border:1px solid #9bbcb5;border-bottom:4px solid #6c9f9b;background:linear-gradient(153deg,#d5f2dc 0%,#b8ded2 68%,#a9d1cd 100%);border-radius:11px;box-shadow:inset 1px 2px 0 #f6fff2,0 3px 3px #b48f9d55;padding:10px}
+.pad:before{background:linear-gradient(125deg,#ffffff5a 0%,transparent 52%)}
+.pad .pad-no{color:#3a6463;font-weight:900;font-size:18px}.pad .pad-name{color:#54756c;font-weight:900;font-size:8px}.pad .pad-tick{background:#84afa7}
+.pad:nth-child(n+5):nth-child(-n+8){background:linear-gradient(153deg,#ffe7be,#f4c7a9 80%);border-color:#dab898;border-bottom-color:#c49b82}
+.pad:nth-child(n+5):nth-child(-n+8) .pad-no{color:#95624a}.pad:nth-child(n+5):nth-child(-n+8) .pad-name{color:#a67754}
+.pad:nth-child(n+9):nth-child(-n+12){background:linear-gradient(153deg,#d7e9ff,#b1d1ed 80%);border-color:#a0bcd9;border-bottom-color:#7f9fbd}
+.pad:nth-child(n+9):nth-child(-n+12) .pad-no{color:#4e6a96}.pad:nth-child(n+9):nth-child(-n+12) .pad-name{color:#627d9f}
+.pad:nth-child(n+13){background:linear-gradient(153deg,#efdaf8,#d4bfea 80%);border-color:#c9addb;border-bottom-color:#a48bbd}
+.pad:nth-child(n+13) .pad-no{color:#725b94}.pad:nth-child(n+13) .pad-name{color:#7c659e}
+.pad.is-down:nth-child(n),.pad.is-pulse:nth-child(n){background:linear-gradient(150deg,#fffdf1,#fff0cc);border-color:#e7c69d;border-bottom-color:#d3a980;box-shadow:0 0 15px #fbf0bdad,inset 0 1px 0 white;transform:translateY(2px)}
+.pad.is-down .pad-no,.pad.is-pulse .pad-no,.pad.is-down .pad-name,.pad.is-pulse .pad-name{color:#665379}
+.command-row{gap:9px;margin-top:16px}.command{min-height:60px;border-radius:10px;border:1px solid #a8c9bc;border-bottom:4px solid #6e9d93;background:linear-gradient(#cdecd3,#95d0c0);color:#355c55;box-shadow:inset 0 2px 0 #edfff0,0 3px 3px #bd93a168}
+.command strong{font-weight:950}.command small{color:#55786c;font-weight:800}
+.command-mutate{border-color:#e2a8bf;border-bottom-color:#c3839e;background:linear-gradient(#f7cbde,#eeb1cd);color:#82546e}.command-mutate small{color:#9d607e}
+.command-keep{border-color:#ada7d9;border-bottom-color:#8882b4;background:linear-gradient(#dcd5fa,#bdb5ea);color:#625985}.command-keep small{color:#79709f}
+.command:active,.command[aria-pressed="true"]{filter:brightness(1.06)}
+.bottom-strip{margin-top:13px}.utility{color:#6e5a7c;border-bottom:1px solid #bd9eb1;font-weight:900;font-size:10px}.utility:active{color:#aa6484}.utility-export{color:#a25975;border-bottom-color:#cc8fa1}.utility-tape{color:#8e667d;border-bottom-color:#be9bba}.utility-tape.is-recording{color:#c44f68;border-bottom-color:#db6b80}
+.export-panel{background:#fff6ea;border:1px solid #d8baba;color:#775972;border-radius:9px}.export-panel a,.export-panel button{background:#b9d9c8;color:#476d5d;border-radius:6px}
+.footer-line{color:#93788b;font-size:8px;font-weight:800}.help{color:#7d687f}.help b{color:#7d536c}.help kbd{color:#78648e}.help-content{border-left-color:#c09ba9}.clear-bank{font-size:10px;background:#f6d5dc;color:#7d5263;border:1px solid #dab3c4;border-radius:5px;padding:3px 6px}.clear-bank:disabled{opacity:.5}
+@media(max-width:390px){.shell{padding:12px 13px 11px;border-radius:23px 23px 28px 28px}.shell::before,.shell::after{top:46px}.screen-panel{padding:8px}.lcd{padding:8px}.display-view{height:104px}.transport-head{margin:9px 0 7px}.pads{gap:7px}.pad{padding:7px;border-bottom-width:3px}.pad .pad-no{font-size:16px}.pad .pad-name{font-size:7px}.command-row{margin-top:11px}.command{min-height:52px}.input-strip{padding:6px;margin-bottom:8px}.input-button{padding:7px 6px;min-width:45px}.source-button{padding:7px}.source-label{font-size:8px}.source-wrap{gap:4px}.bottom-strip{margin-top:8px}.footer-line{margin-top:10px}}
+@media(max-width:350px){.source-label{display:none}.input-controls{gap:4px}.input-button{min-width:45px}.bottom-strip{flex-wrap:wrap}.bottom-left,.bottom-right{gap:9px}}
+/* Reset the v0.1 per-column color override for the first pad bank. */
+.pads .pad:nth-child(-n+4){background:linear-gradient(153deg,#d5f2dc 0%,#b8ded2 68%,#a9d1cd 100%)}
+.pads .pad.is-down:nth-child(-n+4),.pads .pad.is-pulse:nth-child(-n+4){background:linear-gradient(150deg,#fffdf1,#fff0cc)}

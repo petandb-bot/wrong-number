@@ -1,12 +1,18 @@
-# CHANGELOG
+# Changelog
 
-## 0.1.1 — Tape & Step Back
+## v0.1.2
+- New soft-hardware visual identity: pastel moulded shell and four complementary pad banks.
+- All in-app help/manual text in English.
+- MIC captures up to 12 seconds using the MediaRecorder API, stops all microphone tracks afterward.
+- FILE imports audio decoded locally by the browser (up to 25 MB, first 12 seconds used).
+- Onset-biased slicing and per-pad filtering / playback rate / reverse variations across 16 pads.
+- SOUND BANK switch: keeps the original SYNTH instrument intact; SAMPLE is an optional layer.
+- SAMPLE-compatible loop playback, mutation, TAPE, and two-bar WAV rendering.
+- Sample bank cached locally in IndexedDB when available; clear control inside MANUAL.
+- Cache version bumped; PWA icons recolored to match the enclosure.
+- Regression tests and simulated microphone API test.
 
-- Added single-button TAPE for hands-on performance to 30-second 44.1kHz/16-bit stereo WAV. Uses recorded synthesis commands, not MediaRecorder.
-- Added hold RESTORE to undo up to eight mutations/new grooves, leaving original single-tap checkpoint restore intact.
-- Ensured original 16-pad audio.js is byte-identical to v0.1.0.
-- Ensured existing localStorage keys remain unchanged for upgrade safety.
-- Existing two-bar WAV export now snapshots its scene at the start of rendering.
-- Updated UI version, service worker cache, instructions, and smoke tests.
-
-No change to sound design, musical engine, primary button arrangement, or keep/restore semantics.
+## v0.1.1
+- Added TAPE performance-to-WAV rendering (30-second maximum).
+- Added RESTORE long-press undo stack (8 states).
+- Existing synthesized timbres unchanged.

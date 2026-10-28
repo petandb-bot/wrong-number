@@ -1,12 +1,12 @@
-/* WRONG NUMBER v0.1.1 — pocket instrument
+/* WRONG NUMBER v0.1.2 — pocket instrument
  * Timing: Web Audio's currentTime, with a 25ms look-ahead scheduler.
  * Screen: p5.js v1.11.13 when available, local Canvas fallback offline.
  * Playback: all synthesis and mutations remain local to the browser.
  */
 (()=>{'use strict';
-const A=window.WrongAudio; if(!A){document.body.textContent='AUDIO ENGINE FAILED';return;}
+const A=window.WrongAudio, S=window.WrongSamples; if(!A||!S){document.body.textContent='AUDIO ENGINE FAILED';return;}
 const $=id=>document.getElementById(id), N=32, STORE='wrong-number-session-0.1', KEEP='wrong-number-kept-0.1';
-const MAX_TAPE_SECONDS=30, TAPE_TAIL_SECONDS=2.5;
+const MAX_TAPE_SECONDS=30, TAPE_TAIL_SECONDS=2.5, MODE_STORE='wrong-number-source-v0.1.2';
 const randomSeed=()=>((Math.random()*0xffffffff)>>>0);
 const deepCopy=v=>JSON.parse(JSON.stringify(v));
 const getSaved=k=>{try{return JSON.parse(localStorage.getItem(k));}catch{return null;}};
@@ -17,13 +17,103 @@ function validateScene(raw){
 }
 let scene=validateScene(getSaved(STORE))||newScene(),checkpoint=validateScene(getSaved(KEEP));
 let live=null,engine=null,isPlaying=false,scheduler=null,nextStep=0,nextTick=0,loopStarted=0,perfCounter=0,lastPadAt=new Map(),recent=[],downPointers=new Map(),pulseUntil=new Array(16).fill(0),lastPad=-1,displayMessage='READY / TOUCH A PAD',messageUntil=0,renderBusy=false,wavUrl=null,wavFile=null,tape=null,tapeClock=null,undoStack=[];
+// The original synth session remains unchanged; SAMPLE is an optional local bank.
+let sampleBank=null,sourceMode='synth',micRecorder=null,micStream=null,micTimer=null,inputBusy=false,inputVersion=0;
 let stateAt=()=>live?.currentTime??0;
+function bankLabel(){return sourceMode==='sample'&&sampleBank?'SAMPLE':'SYNTH';}
+function updateSourceUi(){
+ const button=$('btn-source');
+ button.innerHTML=`${bankLabel()} <span class="source-dot">●</span>`;
+ button.setAttribute('aria-pressed',String(bankLabel()==='SAMPLE'));
+ button.classList.toggle('is-sample',bankLabel()==='SAMPLE');
+ $('btn-mic').textContent=micRecorder&&micRecorder.state==='recording'?'■ STOP':'● MIC';
+ $('btn-mic').classList.toggle('is-recording',!!micRecorder&&micRecorder.state==='recording');
+ $('btn-mic').setAttribute('aria-pressed',String(!!micRecorder&&micRecorder.state==='recording'));
+ $('btn-file').disabled=inputBusy||!!micRecorder;$('btn-source').disabled=inputBusy;
+ $('btn-mic').disabled=inputBusy&&!(micRecorder&&micRecorder.state==='recording');
+ $('btn-clear-bank').disabled=!sampleBank||inputBusy;
+ if(sampleBank)button.title=`Switch sound bank / ${sampleBank.name} (${sampleBank.duration.toFixed(1)}s)`;
+ else button.title='Use MIC or FILE to create a sample bank';
+}
+function setSource(mode){
+ if(mode==='sample'&&!sampleBank){message('NO SAMPLE / USE MIC OR FILE',3);return;}
+ sourceMode=mode==='sample'?'sample':'synth';
+ try{localStorage.setItem(MODE_STORE,sourceMode);}catch{}
+ updateSourceUi();updateText();message(`${bankLabel()} / READY`,1.8);
+}
+async function loadLocalBank(){
+ const version=inputVersion;
+ try{
+  const bank=await S.load();
+  if(version!==inputVersion)return;
+  if(bank){sampleBank=bank;
+   if(localStorage.getItem(MODE_STORE)==='sample')sourceMode='sample';
+   updateSourceUi();updateText();message(`SAMPLE RELOADED / ${bank.duration.toFixed(1)}S`,2);}
+ }catch(err){console.warn('Sample storage unavailable:',err);}
+}
+function stopTracks(stream){if(stream)for(const track of stream.getTracks())track.stop();}
+async function useAudioBlob(blob,name){
+ inputBusy=true;updateSourceUi();message('ANALYZING INPUT...',5);
+ try{
+  if(!ensureAudio())throw new Error('AUDIO UNAVAILABLE');
+  const raw=await blob.arrayBuffer();
+  const decoded=await live.decodeAudioData(raw);
+  const bank=S.fromAudioBuffer(decoded,name);
+  sampleBank=bank;inputVersion++;
+  try{await S.save(bank);}catch(err){console.warn('Bank will not survive reload:',err);message('SAMPLE READY / NOT SAVED TO STORAGE',3);}
+  sourceMode='sample';try{localStorage.setItem(MODE_STORE,sourceMode);}catch{}
+  updateText();message(`16 SLICES / ${bank.duration.toFixed(1)}S / READY`,4);
+ }catch(err){console.error('Import failed:',err);message('INPUT FAILED / '+String(err?.message||err).slice(0,55),6);}
+ finally{inputBusy=false;updateSourceUi();}
+}
+function stopMic(){
+ clearTimeout(micTimer);micTimer=null;
+ if(!micRecorder)return;
+ if(micRecorder.state!=='inactive')try{micRecorder.stop();}catch(err){console.warn(err);stopTracks(micStream);micStream=null;micRecorder=null;updateSourceUi();}
+}
+async function startMic(){
+ if(inputBusy||renderBusy||tape){if(tape)message('STOP TAPE BEFORE MIC INPUT',3);return;}
+ if(!navigator.mediaDevices?.getUserMedia||typeof MediaRecorder==='undefined'){
+  message('MIC RECORDING NOT SUPPORTED',4);return;
+ }
+ if(!window.isSecureContext){message('MIC NEEDS HTTPS OR LOCALHOST',5);return;}
+ ensureAudio();inputBusy=true;updateSourceUi();message('REQUESTING MIC ACCESS...',5);
+ try{
+  const stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}});
+  micStream=stream;
+  const preferred=['audio/mp4;codecs=mp4a.40.2','audio/mp4','audio/webm;codecs=opus','audio/webm'];
+  const mime=typeof MediaRecorder.isTypeSupported==='function'?preferred.find(t=>MediaRecorder.isTypeSupported(t)):null;
+  const rec=new MediaRecorder(stream,mime?{mimeType:mime}:undefined),chunks=[];
+  micRecorder=rec;
+  rec.ondataavailable=e=>{if(e.data?.size)chunks.push(e.data);};
+  rec.onerror=e=>{console.warn('MIC:',e);message('MIC RECORDING ERROR',4);stopMic();};
+  rec.onstop=async()=>{
+   clearTimeout(micTimer);micTimer=null;stopTracks(stream);
+   if(micStream===stream)micStream=null;
+   micRecorder=null;updateSourceUi();
+   if(!chunks.length){message('MIC EMPTY / TRY AGAIN',4);return;}
+   await useAudioBlob(new Blob(chunks,{type:rec.mimeType||mime||'audio/mp4'}),'MIC TAKE');
+  };
+  rec.start(200);inputBusy=false;updateSourceUi();message('MIC LIVE / TAP STOP / 12S MAX',4);
+  micTimer=setTimeout(stopMic,S.LIMIT*1000);
+ }catch(err){stopTracks(micStream);micStream=null;micRecorder=null;console.error('MIC access:',err);
+  message(err?.name==='NotAllowedError'?'MIC PERMISSION DENIED':'MIC FAILED / '+String(err?.message||err).slice(0,32),5);
+ }finally{inputBusy=false;updateSourceUi();}
+}
+async function clearBank(){
+ if(!sampleBank)return;
+ if(tape){message('STOP TAPE BEFORE CLEARING SAMPLE',3);return;}
+ inputVersion++;sampleBank=null;sourceMode='synth';updateSourceUi();updateText();
+ try{localStorage.setItem(MODE_STORE,'synth');await S.clear();message('SAMPLE CLEARED / SYNTH READY',3);}
+ catch(err){console.warn(err);message('SAMPLE CLEARED / STORAGE ISSUE',3);}
+}
+
 const stepSeconds=()=>60/scene.bpm/4,cycleSeconds=()=>N*stepSeconds();
 function updateText(){
  $('tempo-value').innerHTML=String(scene.bpm).padStart(3,'0')+' <small>BPM</small>';
- $('lcd-mode').textContent=isPlaying?'LOOPING':(checkpoint?'MEMORY OK':'AWAKE?');
+ $('lcd-mode').textContent=isPlaying?'LOOPING':(bankLabel()==='SAMPLE'?'INPUT ON':(checkpoint?'MEMORY OK':'AWAKE?'));
  $('btn-loop').setAttribute('aria-pressed',String(isPlaying));
- $('live-message').textContent=`${scene.events.length.toString().padStart(2,'0')} EVENTS / SEED ${scene.seed.toString(16).slice(-4).toUpperCase()}`;
+ $('live-message').textContent=`${bankLabel()} / ${scene.events.length.toString().padStart(2,'0')} EVENTS / ${scene.seed.toString(16).slice(-4).toUpperCase()}`;
 }
 function message(s,seconds=1.7){displayMessage=s;messageUntil=performance.now()+seconds*1000;$('status-text').textContent=s;}
 function persist(){try{localStorage.setItem(STORE,JSON.stringify(scene));}catch{message('STORAGE UNAVAILABLE');}updateText();}
@@ -42,8 +132,7 @@ function synth(pad,when,velocity=.9,options={}){
  const time=Math.max(when,live.currentTime+.001);
  const params={seed:options.seed??(scene.seed ^ (++perfCounter*98923)),velocity,color:{...(options.color||scene.color)},hold:!!options.hold,fire:!!options.fire};
  A.scheduleVoice(engine,pad,time,params);
- // TAPE stores the exact voice instructions, including live pad hits, repeats and
- // scheduled loop notes. No microphone and no compressed browser recording.
+ // TAPE stores scheduled voices and their sound source; MIC is used only to create the sample bank.
  if(tape && time>=tape.startedAt && time<tape.startedAt+MAX_TAPE_SECONDS){
   tape.events.push({pad,at:time-tape.startedAt,params});
  }
@@ -166,6 +255,17 @@ function restore(){if(!checkpoint){message('NO SNAPSHOT YET');return;}scene=deep
 function fresh(){rememberUndo();scene={...newScene(),bpm:scene.bpm};scene.events=generate(scene.seed);resetPlayhead();persist();message('NEW GROOVE');}
 function tempo(delta){scene.bpm=A.clamp(scene.bpm+delta,48,180);persist();message(`${scene.bpm} BPM`,.8);}
 function bindControls(){
+ $('btn-source').addEventListener('click',()=>setSource(bankLabel()==='SAMPLE'?'synth':'sample'));
+ $('btn-mic').addEventListener('click',()=>micRecorder?stopMic():startMic());
+ $('btn-file').addEventListener('click',()=>{if(!inputBusy&&!tape&&!micRecorder)$('file-picker').click();else message('STOP MIC / TAPE BEFORE IMPORTING',3);});
+ $('file-picker').addEventListener('change',async e=>{
+  const file=e.target.files?.[0];e.target.value='';if(!file)return;
+  if(tape){message('STOP TAPE BEFORE IMPORTING',3);return;}
+  if(file.size>25*1024*1024){message('FILE TOO LARGE / MAX 25MB',4);return;}
+  await useAudioBlob(file,file.name);
+ });
+ $('btn-clear-bank').addEventListener('click',clearBank);
+
  $('btn-loop').addEventListener('click',()=>isPlaying?stopLoop():startLoop());
  $('tempo-down').addEventListener('click',()=>tempo(-2));$('tempo-up').addEventListener('click',()=>tempo(2));
  $('btn-keep').addEventListener('click',keep);$('btn-new').addEventListener('click',fresh);
@@ -182,7 +282,7 @@ function bindControls(){
  window.addEventListener('keydown',e=>{if(e.altKey||e.ctrlKey||e.metaKey||e.repeat||e.target.matches('input,textarea'))return;const k=e.key.toLowerCase(),pad=keys.indexOf(k);if(pad===-1||held.has(k))return;e.preventDefault();held.add(k);$('pads').children[pad].classList.add('is-down');playPad(pad);});
  window.addEventListener('keyup',e=>{const k=e.key.toLowerCase(),pad=keys.indexOf(k);held.delete(k);if(pad!==-1)$('pads').children[pad].classList.remove('is-down');});
  document.addEventListener('visibilitychange',()=>{
-  if(document.hidden){if(tape)stopTape();if(isPlaying){stopLoop();message('PAUSED / RETURN & TAP LOOP',3);}}
+  if(document.hidden){if(micRecorder)stopMic();if(tape)stopTape();if(isPlaying){stopLoop();message('PAUSED / RETURN & TAP LOOP',3);}}
   else if(live&&live.state!=='running'){message('TAP ANY PAD TO REARM AUDIO',4);}
  });
 }
@@ -206,10 +306,10 @@ function completeRender(blob,filename,description){
 }
 function finishRender(){renderBusy=false;$('btn-export').disabled=false;$('btn-tape').disabled=false;}
 async function exportWav(){
- if(renderBusy)return;
+ if(renderBusy||inputBusy||micRecorder){message('FINISH INPUT BEFORE EXPORT',3);return;}
  if(tape){message('STOP TAPE BEFORE LOOP EXPORT',3);return;}
  if(!scene.events.length){scene.events=captureRecent();persist();}
- const snapshot=deepCopy(scene); // UI edits during render must not change the file.
+ const snapshot=deepCopy(scene),bankSnapshot=sampleBank,sourceSnapshot=bankLabel().toLowerCase(); // Freeze the bank and mode during export.
  prepareRender('RENDERING LOOP / WAV...');message('RENDERING LOOP',3);
  await new Promise(resolve=>setTimeout(resolve,30));
  try{
@@ -219,7 +319,9 @@ async function exportWav(){
   // Use the middle cycle to preserve reverb and delay wrapping over the seam.
   for(let cycle=0;cycle<3;cycle++){
    for(const ev of snapshot.events){const t=baseline+cycle*duration+ev.step*stepDuration;
-    A.scheduleVoice(g,ev.pad,t,{seed:(snapshot.seed^ev.variant^ev.step)>>>0,velocity:ev.velocity,color:snapshot.color});}
+    const params={seed:(snapshot.seed^ev.variant^ev.step)>>>0,velocity:ev.velocity,color:snapshot.color};
+    if(sourceSnapshot==='sample'&&bankSnapshot)S.schedule(g,ev.pad,t,params,bankSnapshot);
+    else A.scheduleVoice(g,ev.pad,t,params);}
   }
   const rendered=await ctx.startRendering();
   const start=Math.round((baseline+duration)*sampleRate),end=start+framesPerCycle;
@@ -235,9 +337,9 @@ function updateTapeClock(){
  if(elapsed>=MAX_TAPE_SECONDS){stopTape();}
 }
 function startTape(){
- if(renderBusy||tape)return;
+ if(renderBusy||tape||micRecorder||inputBusy)return;
  if(!ensureAudio())return;
- tape={startedAt:stateAt(),events:[]};
+ tape={startedAt:stateAt(),events:[],bank:sampleBank};
  $('btn-tape').classList.add('is-recording');$('btn-tape').setAttribute('aria-pressed','true');
  $('btn-tape').textContent='● 00s';
  tapeClock=setInterval(updateTapeClock,200);
@@ -260,9 +362,10 @@ async function stopTape(){
   const sampleRate=44100,offset=.035,total=length+TAPE_TAIL_SECONDS;
   const frames=Math.ceil((offset+total)*sampleRate);
   const ctx=new (window.OfflineAudioContext||window.webkitOfflineAudioContext)(2,frames,sampleRate);
-  const g=A.graph(ctx);
+  const g=A.graph(ctx),bankSnapshot=recording.bank;
   for(const note of notes){
-   A.scheduleVoice(g,note.pad,offset+note.at,{...note.params});
+   if(note.params.source==='sample'&&bankSnapshot)S.schedule(g,note.pad,offset+note.at,{...note.params},bankSnapshot);
+   else A.scheduleVoice(g,note.pad,offset+note.at,{...note.params});
   }
   const rendered=await ctx.startRendering();
   const first=Math.floor(offset*sampleRate);
@@ -304,7 +407,7 @@ function attemptP5(){
  script.onerror=()=>console.info('p5 CDN unavailable; internal Canvas fallback active');
  document.head.appendChild(script);
 }
-function init(){renderPads();bindControls();updateText();startCanvasFallback();attemptP5();if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('./sw.js').catch(err=>console.warn('SW:',err));}
+function init(){renderPads();bindControls();updateSourceUi();updateText();loadLocalBank();startCanvasFallback();attemptP5();if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('./sw.js').catch(err=>console.warn('SW:',err));}
 init();
-window.WrongNumberDebug={getScene:()=>deepCopy(scene),isPlaying:()=>isPlaying,isRecording:()=>!!tape,captureRecent,mutate,fresh,undo,startLoop,stopLoop,startTape,stopTape,exportWav,renderPads};
+window.WrongNumberDebug={getScene:()=>deepCopy(scene),isPlaying:()=>isPlaying,isRecording:()=>!!tape,captureRecent,mutate,fresh,undo,startLoop,stopLoop,startTape,stopTape,exportWav,renderPads,bankInfo:()=>({mode:bankLabel(),loaded:!!sampleBank,duration:sampleBank?.duration||0}),importBuffer:async(b)=>useAudioBlob(new Blob([b],{type:'audio/wav'}),'TEST'),setSource};
 })();
