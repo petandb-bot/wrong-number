@@ -1,4 +1,4 @@
-/* WRONG NUMBER v0.1 — pocket instrument
+/* WRONG NUMBER v0.1.1 — pocket instrument
  * Timing: Web Audio's currentTime, with a 25ms look-ahead scheduler.
  * Screen: p5.js v1.11.13 when available, local Canvas fallback offline.
  * Playback: all synthesis and mutations remain local to the browser.
@@ -6,6 +6,7 @@
 (()=>{'use strict';
 const A=window.WrongAudio; if(!A){document.body.textContent='AUDIO ENGINE FAILED';return;}
 const $=id=>document.getElementById(id), N=32, STORE='wrong-number-session-0.1', KEEP='wrong-number-kept-0.1';
+const MAX_TAPE_SECONDS=30, TAPE_TAIL_SECONDS=2.5;
 const randomSeed=()=>((Math.random()*0xffffffff)>>>0);
 const deepCopy=v=>JSON.parse(JSON.stringify(v));
 const getSaved=k=>{try{return JSON.parse(localStorage.getItem(k));}catch{return null;}};
@@ -15,7 +16,7 @@ function validateScene(raw){
  return {bpm:A.clamp(Number(raw.bpm)||92,48,180),seed:(raw.seed>>>0)||3,color:{broken:A.clamp(Number(raw.color?.broken)||.18,0,1),space:A.clamp(Number(raw.color?.space)||.25,0,1),shift:A.clamp(Number(raw.color?.shift)||0,-2,2)},events:raw.events.slice(0,64).filter(e=>Number.isInteger(e.step)&&e.step>=0&&e.step<N&&Number.isInteger(e.pad)&&e.pad>=0&&e.pad<16).map(e=>({step:e.step,pad:e.pad,velocity:A.clamp(Number(e.velocity)||.85,.2,1),variant:(e.variant>>>0)||1}))};
 }
 let scene=validateScene(getSaved(STORE))||newScene(),checkpoint=validateScene(getSaved(KEEP));
-let live=null,engine=null,isPlaying=false,scheduler=null,nextStep=0,nextTick=0,loopStarted=0,perfCounter=0,lastPadAt=new Map(),recent=[],downPointers=new Map(),pulseUntil=new Array(16).fill(0),lastPad=-1,displayMessage='READY / TOUCH A PAD',messageUntil=0,renderBusy=false,wavUrl=null,wavFile=null;
+let live=null,engine=null,isPlaying=false,scheduler=null,nextStep=0,nextTick=0,loopStarted=0,perfCounter=0,lastPadAt=new Map(),recent=[],downPointers=new Map(),pulseUntil=new Array(16).fill(0),lastPad=-1,displayMessage='READY / TOUCH A PAD',messageUntil=0,renderBusy=false,wavUrl=null,wavFile=null,tape=null,tapeClock=null,undoStack=[];
 let stateAt=()=>live?.currentTime??0;
 const stepSeconds=()=>60/scene.bpm/4,cycleSeconds=()=>N*stepSeconds();
 function updateText(){
@@ -39,7 +40,13 @@ function pulse(pad,time=performance.now()){pulseUntil[pad]=time+125;lastPad=pad;
 function synth(pad,when,velocity=.9,options={}){
  if(!engine)return;
  const time=Math.max(when,live.currentTime+.001);
- A.scheduleVoice(engine,pad,time,{seed:options.seed??(scene.seed ^ (++perfCounter*98923)),velocity,color:options.color||scene.color,hold:options.hold,fire:options.fire});
+ const params={seed:options.seed??(scene.seed ^ (++perfCounter*98923)),velocity,color:{...(options.color||scene.color)},hold:!!options.hold,fire:!!options.fire};
+ A.scheduleVoice(engine,pad,time,params);
+ // TAPE stores the exact voice instructions, including live pad hits, repeats and
+ // scheduled loop notes. No microphone and no compressed browser recording.
+ if(tape && time>=tape.startedAt && time<tape.startedAt+MAX_TAPE_SECONDS){
+  tape.events.push({pad,at:time-tape.startedAt,params});
+ }
  const ms=(time-live.currentTime)*1000;
  if(ms>10)setTimeout(()=>pulse(pad),ms);else pulse(pad);
 }
@@ -122,7 +129,14 @@ function scheduleAhead(){
   if(nextStep===0)loopStarted=nextTick;
  }
 }
+function rememberUndo(){undoStack.push(deepCopy(scene));if(undoStack.length>8)undoStack.shift();}
+function resetPlayhead(){if(isPlaying){nextStep=0;nextTick=stateAt()+.07;loopStarted=nextTick;}}
+function undo(){
+ if(!undoStack.length){message('NO EARLIER MUTATION');return;}
+ scene=undoStack.pop();resetPlayhead();persist();message('BACK / PREVIOUS VERSION');
+}
 function mutate(strong=false){
+ rememberUndo();
  const r=A.rng(scene.seed^randomSeed());
  if(!scene.events.length)scene.events=generate(scene.seed);
  const old=scene.events,amount=strong?.64:.29,changed=[];
@@ -148,13 +162,17 @@ function mutate(strong=false){
  persist();message(strong?'MUTATION / HEAVY':'MUTATION / LIGHT');
 }
 function keep(){checkpoint=deepCopy(scene);try{localStorage.setItem(KEEP,JSON.stringify(checkpoint));}catch{}message('SNAPSHOT KEPT');updateText();}
-function restore(){if(!checkpoint){message('NO SNAPSHOT YET');return;}scene=deepCopy(checkpoint);if(isPlaying){nextStep=0;nextTick=stateAt()+.07;loopStarted=nextTick;}persist();message('SNAPSHOT RESTORED');}
-function fresh(){scene={...newScene(),bpm:scene.bpm};scene.events=generate(scene.seed);if(isPlaying){nextStep=0;nextTick=stateAt()+.07;loopStarted=nextTick;}persist();message('NEW GROOVE');}
+function restore(){if(!checkpoint){message('NO SNAPSHOT YET');return;}scene=deepCopy(checkpoint);resetPlayhead();persist();message('SNAPSHOT RESTORED');}
+function fresh(){rememberUndo();scene={...newScene(),bpm:scene.bpm};scene.events=generate(scene.seed);resetPlayhead();persist();message('NEW GROOVE');}
 function tempo(delta){scene.bpm=A.clamp(scene.bpm+delta,48,180);persist();message(`${scene.bpm} BPM`,.8);}
 function bindControls(){
  $('btn-loop').addEventListener('click',()=>isPlaying?stopLoop():startLoop());
  $('tempo-down').addEventListener('click',()=>tempo(-2));$('tempo-up').addEventListener('click',()=>tempo(2));
- $('btn-keep').addEventListener('click',keep);$('btn-restore').addEventListener('click',restore);$('btn-new').addEventListener('click',fresh);
+ $('btn-keep').addEventListener('click',keep);$('btn-new').addEventListener('click',fresh);
+ const restoreButton=$('btn-restore');let restoreDown=0;
+ restoreButton.addEventListener('pointerdown',()=>{restoreDown=performance.now();});
+ restoreButton.addEventListener('click',()=>{const long=restoreDown&&performance.now()-restoreDown>=650;restoreDown=0;if(long)undo();else restore();});
+ $('btn-tape').addEventListener('click',()=>tape?stopTape():startTape());
  const m=$('btn-mutate');let holdStart=0;
  m.addEventListener('pointerdown',()=>{holdStart=performance.now();});
  m.addEventListener('click',()=>{const strong=holdStart&&performance.now()-holdStart>=650;holdStart=0;mutate(strong);});
@@ -163,38 +181,95 @@ function bindControls(){
  const keys='1234qwerasdfzxcv';const held=new Set();
  window.addEventListener('keydown',e=>{if(e.altKey||e.ctrlKey||e.metaKey||e.repeat||e.target.matches('input,textarea'))return;const k=e.key.toLowerCase(),pad=keys.indexOf(k);if(pad===-1||held.has(k))return;e.preventDefault();held.add(k);$('pads').children[pad].classList.add('is-down');playPad(pad);});
  window.addEventListener('keyup',e=>{const k=e.key.toLowerCase(),pad=keys.indexOf(k);held.delete(k);if(pad!==-1)$('pads').children[pad].classList.remove('is-down');});
- document.addEventListener('visibilitychange',()=>{if(document.hidden){if(isPlaying){stopLoop();message('PAUSED / RETURN & TAP LOOP',3);}}else if(live&&live.state!=='running'){message('TAP ANY PAD TO REARM AUDIO',4);}});
+ document.addEventListener('visibilitychange',()=>{
+  if(document.hidden){if(tape)stopTape();if(isPlaying){stopLoop();message('PAUSED / RETURN & TAP LOOP',3);}}
+  else if(live&&live.state!=='running'){message('TAP ANY PAD TO REARM AUDIO',4);}
+ });
 }
-async function exportWav(){
- if(renderBusy)return;renderBusy=true;
+// Reusable WAV result UI. Both the seamless two-bar loop and TAPE share it.
+function prepareRender(label){
+ renderBusy=true;
  $('export-panel').hidden=false;$('download-link').hidden=true;$('btn-share').hidden=true;
- $('export-status').textContent='RENDERING 44.1kHz / 16-BIT WAV...';$('btn-export').disabled=true;message('RENDERING / PLEASE HOLD',4);
- // Yield once to draw the status before the potentially expensive offline rendering.
+ $('export-status').textContent=label;
+ $('btn-export').disabled=true;$('btn-tape').disabled=true;
+}
+function completeRender(blob,filename,description){
+ if(wavUrl)URL.revokeObjectURL(wavUrl);
+ wavUrl=URL.createObjectURL(blob);
+ wavFile=new File([blob],filename,{type:'audio/wav'});
+ const link=$('download-link');link.href=wavUrl;link.download=filename;link.hidden=false;
+ let canShare=false;
+ try{canShare=!!(navigator.share&&navigator.canShare&&navigator.canShare({files:[wavFile]}));}catch{}
+ $('btn-share').hidden=!canShare;
+ $('export-status').textContent=`READY / ${(blob.size/1048576).toFixed(1)} MB / ${description}`;
+ message('WAV READY / TAP DOWNLOAD',5);
+}
+function finishRender(){renderBusy=false;$('btn-export').disabled=false;$('btn-tape').disabled=false;}
+async function exportWav(){
+ if(renderBusy)return;
+ if(tape){message('STOP TAPE BEFORE LOOP EXPORT',3);return;}
+ if(!scene.events.length){scene.events=captureRecent();persist();}
+ const snapshot=deepCopy(scene); // UI edits during render must not change the file.
+ prepareRender('RENDERING LOOP / WAV...');message('RENDERING LOOP',3);
  await new Promise(resolve=>setTimeout(resolve,30));
  try{
-  if(!scene.events.length){scene.events=captureRecent();persist();}
-  const sampleRate=44100,duration=cycleSeconds(),framesPerCycle=Math.round(duration*sampleRate);
+  const sampleRate=44100,duration=N*60/snapshot.bpm/4,framesPerCycle=Math.round(duration*sampleRate);
   const ctx=new (window.OfflineAudioContext||window.webkitOfflineAudioContext)(2,framesPerCycle*3+Math.ceil(sampleRate*.12),sampleRate);
-  const g=A.graph(ctx),stepDuration=60/scene.bpm/4,baseline=.035;
-  // Render three identical cycles; extract the middle one. Previous-cycle tails
-  // then cross the boundary without a fade or an abrupt reverb cutoff.
+  const g=A.graph(ctx),stepDuration=60/snapshot.bpm/4,baseline=.035;
+  // Use the middle cycle to preserve reverb and delay wrapping over the seam.
   for(let cycle=0;cycle<3;cycle++){
-   for(const ev of scene.events){const t=baseline+cycle*duration+ev.step*stepDuration;
-    A.scheduleVoice(g,ev.pad,t,{seed:(scene.seed^ev.variant^ev.step)>>>0,velocity:ev.velocity,color:scene.color});}
+   for(const ev of snapshot.events){const t=baseline+cycle*duration+ev.step*stepDuration;
+    A.scheduleVoice(g,ev.pad,t,{seed:(snapshot.seed^ev.variant^ev.step)>>>0,velocity:ev.velocity,color:snapshot.color});}
   }
   const rendered=await ctx.startRendering();
   const start=Math.round((baseline+duration)*sampleRate),end=start+framesPerCycle;
   const blob=A.audioBufferToWav(rendered,start,end);
-  if(wavUrl)URL.revokeObjectURL(wavUrl);
-  wavUrl=URL.createObjectURL(blob);
-  const filename=`wrong-number_${scene.bpm}bpm_${scene.seed.toString(16).slice(0,6)}.wav`;
-  wavFile=new File([blob],filename,{type:'audio/wav'});
-  const link=$('download-link');link.href=wavUrl;link.download=filename;link.hidden=false;
-  const shareSupported=!!(navigator.share&&navigator.canShare&&navigator.canShare({files:[wavFile]}));$('btn-share').hidden=!shareSupported;
-  $('export-status').textContent=`READY / ${(blob.size/1048576).toFixed(1)} MB / TWO BARS`;
-  message('WAV READY / TAP DOWNLOAD',5);
+  completeRender(blob,`wrong-number_${snapshot.bpm}bpm_${snapshot.seed.toString(16).slice(0,6)}.wav`,'TWO BARS');
  }catch(err){console.error(err);$('export-status').textContent='EXPORT FAILED / '+String(err?.message||err).slice(0,90);message('WAV EXPORT FAILED',4);}
- finally{renderBusy=false;$('btn-export').disabled=false;}
+ finally{finishRender();}
+}
+function updateTapeClock(){
+ if(!tape)return;
+ const elapsed=Math.min(MAX_TAPE_SECONDS,Math.max(0,stateAt()-tape.startedAt));
+ $('btn-tape').textContent=`● ${String(Math.floor(elapsed)).padStart(2,'0')}s`;
+ if(elapsed>=MAX_TAPE_SECONDS){stopTape();}
+}
+function startTape(){
+ if(renderBusy||tape)return;
+ if(!ensureAudio())return;
+ tape={startedAt:stateAt(),events:[]};
+ $('btn-tape').classList.add('is-recording');$('btn-tape').setAttribute('aria-pressed','true');
+ $('btn-tape').textContent='● 00s';
+ tapeClock=setInterval(updateTapeClock,200);
+ message('TAPE / RECORDING / 30S MAX',2);
+}
+async function stopTape(){
+ if(!tape)return;
+ clearInterval(tapeClock);tapeClock=null;
+ const recording=tape;tape=null;
+ const length=Math.min(MAX_TAPE_SECONDS,Math.max(.10,stateAt()-recording.startedAt));
+ $('btn-tape').classList.remove('is-recording');$('btn-tape').setAttribute('aria-pressed','false');
+ $('btn-tape').textContent='● TAPE';
+ if(!recording.events.length){message('TAPE EMPTY / NOTHING TO SAVE',3);return;}
+ // A small time allowance includes notes scheduled just ahead of the stop tap.
+ const notes=recording.events.filter(e=>e.at>=0 && e.at<length);
+ if(!notes.length){message('TAPE EMPTY / NOTHING TO SAVE',3);return;}
+ prepareRender('RENDERING TAPE / WAV...');message('RENDERING TAPE',3);
+ await new Promise(resolve=>setTimeout(resolve,30));
+ try{
+  const sampleRate=44100,offset=.035,total=length+TAPE_TAIL_SECONDS;
+  const frames=Math.ceil((offset+total)*sampleRate);
+  const ctx=new (window.OfflineAudioContext||window.webkitOfflineAudioContext)(2,frames,sampleRate);
+  const g=A.graph(ctx);
+  for(const note of notes){
+   A.scheduleVoice(g,note.pad,offset+note.at,{...note.params});
+  }
+  const rendered=await ctx.startRendering();
+  const first=Math.floor(offset*sampleRate);
+  const blob=A.audioBufferToWav(rendered,first,first+Math.floor(total*sampleRate));
+  completeRender(blob,`wrong-number_tape_${Math.round(length)}s_${Date.now()}.wav`,`${Math.round(length)}S TAPE + TAIL`);
+ }catch(err){console.error(err);$('export-status').textContent='TAPE EXPORT FAILED / '+String(err?.message||err).slice(0,90);message('TAPE EXPORT FAILED',4);}
+ finally{finishRender();}
 }
 // LCD renderer. Uses a logical pixel grid to evoke LCD hardware without scanline-heavy decoration.
 function paint(ctx,w,h){
@@ -231,5 +306,5 @@ function attemptP5(){
 }
 function init(){renderPads();bindControls();updateText();startCanvasFallback();attemptP5();if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('./sw.js').catch(err=>console.warn('SW:',err));}
 init();
-window.WrongNumberDebug={getScene:()=>deepCopy(scene),isPlaying:()=>isPlaying,captureRecent,mutate,fresh,startLoop,stopLoop,exportWav,renderPads};
+window.WrongNumberDebug={getScene:()=>deepCopy(scene),isPlaying:()=>isPlaying,isRecording:()=>!!tape,captureRecent,mutate,fresh,undo,startLoop,stopLoop,startTape,stopTape,exportWav,renderPads};
 })();

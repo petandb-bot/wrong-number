@@ -32,7 +32,7 @@
       <button id="btn-keep" class="command command-keep"><strong>KEEP</strong><small>SNAPSHOT</small></button>
     </section>
     <div class="bottom-strip">
-      <button id="btn-restore" class="utility">↶ RESTORE</button>
+      <div class="bottom-left"><button id="btn-restore" class="utility" title="長押しで直前のMUTATE/NEWを戻す">↶ RESTORE</button><button id="btn-tape" class="utility utility-tape" aria-pressed="false" title="タップで演奏を録音・停止（最大30秒）">● TAPE</button></div>
       <div class="bottom-right"><button id="btn-new" class="utility">✳ NEW</button><button id="btn-export" class="utility utility-export">⬇ MAKE WAV</button></div>
     </div>
     <div id="export-panel" class="export-panel" hidden>
@@ -40,15 +40,15 @@
       <a id="download-link" href="#" download="wrong-number-loop.wav" hidden>DOWNLOAD WAV ↗</a>
       <button id="btn-share" hidden>SHARE / SAVE TO FILES</button>
     </div>
-    <div class="footer-line"><span id="live-message">NO INPUT / NO MEMORY</span><span>v0.1.0 <span aria-hidden="true">●</span></span></div>
+    <div class="footer-line"><span id="live-message">NO INPUT / NO MEMORY</span><span>v0.1.1 <span aria-hidden="true">●</span></span></div>
   </main>
   <details class="help">
     <summary>HOW TO PLAY / 使い方</summary>
     <div class="help-content">
       <p>16個のキーを叩くと音が鳴ります。連打すると音が変化し、長押しすると細かい反復が始まります。複数の指で同時に演奏できます。</p>
       <p><b>LOOP</b>：直前の演奏を約2小節のパターンに変換して再生。何も演奏していなければ自動生成します。再生中に押すと停止。再生中のパッド演奏は次周からループに加わります。</p>
-      <p><b>MUTATE</b>：現在のパターンから、リズム・音色・発音を変異させます。長押しすると強い変異。<b>KEEP</b>：現在の状態をチェックポイントとして保存。<b>RESTORE</b>：保存した状態に戻します。</p>
-      <p><b>NEW</b>：新しいパターンを生成。<b>MAKE WAV</b>：2小節のシームレスループを44.1kHz / 16-bit stereo WAVに出力。保存リンクまたはiPhoneの共有メニューを使用してください。</p>
+      <p><b>MUTATE</b>：現在のパターンから、リズム・音色・発音を変異させます。長押しすると強い変異。<b>KEEP</b>：現在の状態をチェックポイントとして保存。<b>RESTORE</b>：保存した状態に戻します。RESTORE長押しで直前のMUTATE/NEWを1段階戻します（最大8段階）。</p>
+      <p><b>TAPE</b>：タップで生演奏の録音開始、再タップで終了。ループ再生中の音やパッド演奏も含み、最大30秒のWAVを生成します（終端に約2.5秒の残響を追加）。<b>NEW</b>：新しいパターンを生成。<b>MAKE WAV</b>：2小節のシームレスループを44.1kHz / 16-bit stereo WAVに出力。保存リンクまたはiPhoneの共有メニューを使用してください。</p>
       <p>PCキーボード：<kbd>1 2 3 4</kbd> / <kbd>Q W E R</kbd> / <kbd>A S D F</kbd> / <kbd>Z X C V</kbd>。演奏が無音の場合はもう一度パッドをタップしてください。</p>
       <p>v0.1では内蔵音源のみです。マイク・外部サンプル入力は次段階の機能として設計しています。</p>
     </div>

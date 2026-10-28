@@ -1,4 +1,4 @@
-"""Smoke test for WRONG NUMBER v0.1.
+"""Smoke test for WRONG NUMBER v0.1.1
 
 Requires: pip install playwright; playwright install chromium
 Optional: CHROMIUM_PATH=/usr/bin/chromium
@@ -47,6 +47,15 @@ with sync_playwright() as p:
     assert after != before
     page.locator('#btn-restore').click()
     assert page.evaluate('WrongNumberDebug.getScene()') == before
+    # Hold RESTORE: a different, single-step mutation undo. KEEP stays untouched.
+    page.locator('#btn-mutate').click()
+    assert page.evaluate('WrongNumberDebug.getScene()') != before
+    restore = page.locator('#btn-restore')
+    restore.hover()
+    page.mouse.down()
+    page.wait_for_timeout(740)
+    page.mouse.up()
+    assert page.evaluate('WrongNumberDebug.getScene()') == before
     page.locator('#tempo-up').click()
     assert page.evaluate('WrongNumberDebug.getScene().bpm') == 94
 
@@ -65,6 +74,27 @@ with sync_playwright() as p:
             assert wav.getnframes() > 150000
             print(f'WAV verified: {wav.getnframes()} frames, stereo, 44.1 kHz, 16-bit PCM')
 
+    # TAPE records actual scheduled loop and manual pad events and renders full jam WAV.
+    page.locator('#btn-tape').click()
+    assert page.evaluate('WrongNumberDebug.isRecording()')
+    page.locator('.pad').nth(8).click()
+    page.locator('.pad').nth(3).click()
+    page.wait_for_timeout(600)
+    page.locator('#btn-tape').click()
+    assert not page.evaluate('WrongNumberDebug.isRecording()')
+    page.wait_for_function("!document.getElementById('download-link').hidden", timeout=60000)
+    with tempfile.TemporaryDirectory() as tape_dir:
+        with page.expect_download() as download:
+            page.locator('#download-link').click()
+        tape_path = Path(tape_dir) / 'tape.wav'
+        download.value.save_as(tape_path)
+        with wave.open(str(tape_path), 'rb') as w:
+            assert (w.getnchannels(), w.getsampwidth(), w.getframerate()) == (2, 2, 44100)
+            assert w.getnframes() > 2.5*44100
+            frames = w.readframes(w.getnframes())
+            assert any(b != 0 for b in frames[:32000]), 'tape begins silent'
+            print(f'TAPE verified: {w.getnframes()} frames, stereo, 44.1 kHz, 16-bit PCM')
+
     assert not errors, errors
-    print('PASS: pads, loop, mutate, snapshot, restore, tempo, WAV, no JS exceptions')
+    print('PASS: original pads, loop, mutate, snapshot, restore, undo, tempo, loop WAV, TAPE WAV, no JS exceptions')
     browser.close()
