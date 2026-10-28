@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="theme-color" content="#202922">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="WRONG NUMBER">
+  <meta name="description" content="A small instrument that remembers your mistakes.">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="assets/icon-180.png">
+  <link rel="icon" href="assets/icon-192.png">
+  <link rel="stylesheet" href="style.css">
+  <title>WRONG NUMBER — pocket instrument</title>
+</head>
+<body>
+  <main class="shell" aria-label="WRONG NUMBER instrument">
+    <div class="shell-topline"><span>W/N</span><span>POCKET INSTRUMENT // 01</span><span class="power-led"></span></div>
+    <section class="screen-panel" aria-label="Display">
+      <div class="lcd">
+        <div class="lcd-top"><span>WRONG NUMBER</span><span id="lcd-mode">AWAKE?</span></div>
+        <div class="display-view" id="display-view" aria-label="Audio visualization"><canvas id="display-fallback" width="320" height="128"></canvas><div id="p5-container"></div></div>
+        <div class="lcd-bottom"><span id="status-text">TOUCH ANY KEY TO START</span><span id="beat-readout">--:--</span></div>
+      </div>
+    </section>
+    <div class="transport-head"><span>MEMORY / TWO BARS</span><div class="tempo"><button id="tempo-down" aria-label="BPMを下げる">−</button><span id="tempo-value" aria-label="Tempo">092 <small>BPM</small></span><button id="tempo-up" aria-label="BPMを上げる">+</button></div></div>
+    <section id="pads" class="pads" aria-label="16 sound pads"></section>
+    <section class="command-row" aria-label="Loop controls">
+      <button id="btn-loop" class="command command-loop" aria-pressed="false"><strong>LOOP</strong><small>CAPTURE / STOP</small></button>
+      <button id="btn-mutate" class="command command-mutate"><strong>MUTATE</strong><small>EVOLVE</small></button>
+      <button id="btn-keep" class="command command-keep"><strong>KEEP</strong><small>SNAPSHOT</small></button>
+    </section>
+    <div class="bottom-strip">
+      <button id="btn-restore" class="utility">↶ RESTORE</button>
+      <div class="bottom-right"><button id="btn-new" class="utility">✳ NEW</button><button id="btn-export" class="utility utility-export">⬇ MAKE WAV</button></div>
+    </div>
+    <div id="export-panel" class="export-panel" hidden>
+      <span id="export-status">PREPARING AUDIO...</span>
+      <a id="download-link" href="#" download="wrong-number-loop.wav" hidden>DOWNLOAD WAV ↗</a>
+      <button id="btn-share" hidden>SHARE / SAVE TO FILES</button>
+    </div>
+    <div class="footer-line"><span id="live-message">NO INPUT / NO MEMORY</span><span>v0.1.0 <span aria-hidden="true">●</span></span></div>
+  </main>
+  <details class="help">
+    <summary>HOW TO PLAY / 使い方</summary>
+    <div class="help-content">
+      <p>16個のキーを叩くと音が鳴ります。連打すると音が変化し、長押しすると細かい反復が始まります。複数の指で同時に演奏できます。</p>
+      <p><b>LOOP</b>：直前の演奏を約2小節のパターンに変換して再生。何も演奏していなければ自動生成します。再生中に押すと停止。再生中のパッド演奏は次周からループに加わります。</p>
+      <p><b>MUTATE</b>：現在のパターンから、リズム・音色・発音を変異させます。長押しすると強い変異。<b>KEEP</b>：現在の状態をチェックポイントとして保存。<b>RESTORE</b>：保存した状態に戻します。</p>
+      <p><b>NEW</b>：新しいパターンを生成。<b>MAKE WAV</b>：2小節のシームレスループを44.1kHz / 16-bit stereo WAVに出力。保存リンクまたはiPhoneの共有メニューを使用してください。</p>
+      <p>PCキーボード：<kbd>1 2 3 4</kbd> / <kbd>Q W E R</kbd> / <kbd>A S D F</kbd> / <kbd>Z X C V</kbd>。演奏が無音の場合はもう一度パッドをタップしてください。</p>
+      <p>v0.1では内蔵音源のみです。マイク・外部サンプル入力は次段階の機能として設計しています。</p>
+    </div>
+  </details>
+  <script src="audio.js" defer></script>
+  <script src="app.js" defer></script>
+</body>
+</html>

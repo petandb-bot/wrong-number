@@ -1,0 +1,15 @@
+{
+  "name": "WRONG NUMBER — Pocket Instrument",
+  "short_name": "WRONG NUMBER",
+  "description": "A small instrument that remembers your mistakes.",
+  "lang": "ja",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#151d17",
+  "theme_color": "#202922",
+  "icons": [
+    {"src": "assets/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable"},
+    {"src": "assets/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"}
+  ]
+}
