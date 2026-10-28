@@ -1,4 +1,4 @@
-/* WRONG NUMBER v0.1.5 — LITTLE ACCIDENTS
+/* WRONG NUMBER v0.1.6 — LITTLE ACCIDENTS
    Pop-toy interface; compact play surface, iPhone-first; no emoji-dependent icons. */
 :root{font-family:ui-rounded,system-ui,-apple-system,"Arial Rounded MT Bold",sans-serif;color:#30113b;background:#301036;font-synthesis:none;-webkit-text-size-adjust:100%}
 *{box-sizing:border-box}html{min-height:100%;background:#301036}body{margin:0;min-height:100dvh;padding:calc(env(safe-area-inset-top) + 6px) 8px calc(env(safe-area-inset-bottom) + 12px);background:radial-gradient(ellipse at 50% 0%,#6f224f,#2c113b 64%);touch-action:manipulation;overscroll-behavior-y:contain}
@@ -47,3 +47,7 @@ button{font:inherit;cursor:pointer;-webkit-tap-highlight-color:transparent;touch
  .shell{padding-top:8px;padding-bottom:8px}
  .toolbar{margin:7px 0}
 }
+
+/* Distinct mechanical press response; the animation is functional, not ornamental. */
+.command-mutate{touch-action:manipulation;-webkit-touch-callout:none}
+.command-mutate.is-mutating{background:#dfff61;box-shadow:inset 2px 2px 0 #ffffffa8,0 2px 0 #84175f;transform:translateY(2px)}

@@ -1,4 +1,4 @@
-/* WRONG NUMBER v0.1.5 — LITTLE ACCIDENTS
+/* WRONG NUMBER v0.1.6 — ROTTEN CARROT
  * Timing: Web Audio's currentTime, with a 25ms look-ahead scheduler.
  * Screen: p5.js v1.11.13 when available, local Canvas fallback offline.
  * Playback: all synthesis and mutations remain local to the browser.
@@ -13,7 +13,7 @@ const getSaved=k=>{try{return JSON.parse(localStorage.getItem(k));}catch{return 
 const newScene=()=>({bpm:92,seed:randomSeed(),color:{broken:.24,space:.27,shift:0},kit:0,events:[]});
 function validateScene(raw){
  if(!raw||typeof raw!=='object'||!Array.isArray(raw.events))return null;
- return {bpm:A.clamp(Number(raw.bpm)||92,48,180),seed:(raw.seed>>>0)||3,kit:A.clamp(Math.floor(Number(raw.kit)||0),0,3),color:{broken:A.clamp(Number(raw.color?.broken)||.18,0,1),space:A.clamp(Number(raw.color?.space)||.25,0,1),shift:A.clamp(Number(raw.color?.shift)||0,-2,2)},events:raw.events.slice(0,64).filter(e=>Number.isInteger(e.step)&&e.step>=0&&e.step<N&&Number.isInteger(e.pad)&&e.pad>=0&&e.pad<16).map(e=>({step:e.step,pad:e.pad,velocity:A.clamp(Number(e.velocity)||.85,.2,1),variant:(e.variant>>>0)||1}))};
+ return {bpm:A.clamp(Number(raw.bpm)||92,48,180),seed:(raw.seed>>>0)||3,kit:A.clamp(Math.floor(Number(raw.kit)||0),0,4),color:{broken:A.clamp(Number(raw.color?.broken)||.18,0,1),space:A.clamp(Number(raw.color?.space)||.25,0,1),shift:A.clamp(Number(raw.color?.shift)||0,-2,2)},events:raw.events.slice(0,64).filter(e=>Number.isInteger(e.step)&&e.step>=0&&e.step<N&&Number.isInteger(e.pad)&&e.pad>=0&&e.pad<16).map(e=>({step:e.step,pad:e.pad,velocity:A.clamp(Number(e.velocity)||.85,.2,1),variant:(e.variant>>>0)||1}))};
 }
 let scene=validateScene(getSaved(STORE))||newScene(),checkpoint=validateScene(getSaved(KEEP));
 let live=null,engine=null,isPlaying=false,scheduler=null,nextStep=0,nextTick=0,loopStarted=0,perfCounter=0,lastPadAt=new Map(),recent=[],downPointers=new Map(),pulseUntil=new Array(16).fill(0),lastPad=-1,displayMessage='READY / TOUCH A PAD',messageUntil=0,renderBusy=false,wavUrl=null,wavFile=null,tape=null,tapeClock=null,undoStack=[];
@@ -24,11 +24,11 @@ const kitLabel=()=>A.KIT_TITLES[scene.kit]||A.KIT_TITLES[0];
 function updateKitUi(){
  const name=kitLabel();
  $('btn-source').textContent=name;
- $('btn-source').title=`Sound kit ${scene.kit+1} of 4: ${name}. Tap to select next.`;
+ $('btn-source').title=`Sound kit ${scene.kit+1} of ${A.KIT_TITLES.length}: ${name}. Tap to select next.`;
  $('lcd-kit').textContent=`0${scene.kit+1} / ${name}`;
 }
 function setKit(index){
- scene.kit=(index+4)%4;
+ scene.kit=(index+A.KIT_TITLES.length)%A.KIT_TITLES.length;
  updateKitUi();persist();message(`${kitLabel()} / LOADED`,2);
 }
 const stepSeconds=()=>60/scene.bpm/4,cycleSeconds=()=>N*stepSeconds();
@@ -113,7 +113,7 @@ function generate(seed=randomSeed()){
  for(let bar=0;bar<2;bar++){
   const o=bar*16;
   add(o,bar===0?0:(r()<.76?0:kit===3?1:2),.90);
-  if(r()<(kit===3?.62:.93))add(o+8,r()<.65?0:3,.82);
+  if(r()<(kit===3?.86:kit===4?.97:.93))add(o+8,r()<.65?0:3,.82);
   if(kit===1){
    [2,6,10,14].forEach(s=>{if(r()<.76)add(o+s+(r()<.22?1:0),4+Math.floor(r()*4),.47+r()*.3);});
    for(let j=0;j<6;j++)if(r()<.58)add(o+Math.floor(r()*16),8+Math.floor(r()*8),.43+r()*.27);
@@ -122,8 +122,11 @@ function generate(seed=randomSeed()){
    [3,7,11,15].forEach(s=>{if(r()<.58)add(o+s,4+Math.floor(r()*4),.43+r()*.29);});
    for(let j=0;j<4;j++)if(r()<.57)add(o+Math.floor(r()*16),9+Math.floor(r()*7),.44+r()*.23);
   }else if(kit===3){
-   [4,12].forEach(s=>{if(r()<.77)add(o+s,4+Math.floor(r()*4),.38+r()*.22);});
-   for(let j=0;j<4;j++)if(r()<.41)add(o+Math.floor(r()*16),8+Math.floor(r()*8),.38+r()*.27);
+   [3,6,10,13].forEach(s=>{if(r()<.84)add(o+s,4+Math.floor(r()*4),.53+r()*.26);});
+   for(let j=0;j<6;j++)if(r()<.64)add(o+Math.floor(r()*16),8+Math.floor(r()*8),.40+r()*.31);
+  }else if(kit===4){
+   [2,5,9,14].forEach(s=>{if(r()<.87)add(o+s+(r()<.18?1:0),4+Math.floor(r()*4),.44+r()*.37);});
+   for(let j=0;j<9;j++)if(r()<.74)add(o+Math.floor(r()*16),8+Math.floor(r()*8),.35+r()*.35);
   }else{
    for(let s=0;s<16;s+=2)if(r()<.67)add(o+s+(r()<.12?1:0),r()<.52?4:5,.48+r()*.29);
    [4,12].forEach(s=>{if(r()<.91)add(o+s,r()<.57?7:6,.58+r()*.22);});
@@ -169,31 +172,59 @@ function undo(){
  scene=undoStack.pop();resetPlayhead();persist();message('BACK / PREVIOUS VERSION');
 }
 function mutate(strong=false){
+ // v0.1.6: one press must create a new AUDIBLE groove, not just change saved data.
+ // Protect primary downbeats while guaranteeing several changed notes each time.
  rememberUndo();
- const r=A.rng(scene.seed^randomSeed());
- if(!scene.events.length)scene.events=generate(scene.seed);
- const old=scene.events,amount=(strong?.64:.29)*(scene.kit===1?1.25:scene.kit===3?.68:scene.kit===2?.85:1),changed=[];
- for(const e of old){
-  const anchor=e.pad<4&&(e.step%8===0);const chance=r();
-  if(!anchor&&chance<amount*.28)continue;
+ if(!scene.events.length)scene.events=captureRecent();
+ const previous=scene.events.map(e=>({...e}));
+ const r=A.rng((scene.seed ^ randomSeed())>>>0);
+ const kit=scene.kit,changed=[];
+ const openness=[.37,.52,.41,.57,.64][kit],density=[.18,.25,.17,.26,.32][kit];
+ const amount=strong?.79:openness;
+ let moved=0;
+ for(let i=0;i<previous.length;i++){
+  const e=previous[i],anchor=e.pad<4&&e.step%8===0;
+  if(!anchor&&r()<amount*.16)continue;
   const item={...e};
-  if(!anchor&&r()<amount){item.step=(item.step+(r()<.5?-1:1)*(1+Math.floor(r()*(strong?5:2)))+N)%N;}
-  if(!anchor&&r()<amount*.42)item.pad=Math.floor(item.pad/4)*4+Math.floor(r()*4);
-  item.velocity=A.clamp(item.velocity+(r()-.5)*(strong?.35:.16),.25,1);
+  // A predictable fraction changes onsets or instrument, even when the random draws are quiet.
+  if(!anchor&&(i%4===1 || r()<amount*.70)){
+   const direction=r()<.5?-1:1;
+   const distance=strong?2+Math.floor(r()*5):1+Math.floor(r()*3);
+   item.step=(item.step+direction*distance+N)%N;
+   moved++;
+  }
+  if(!anchor&&(i%5===2||r()<amount*.40)){
+   const group=Math.floor(item.pad/4);
+   const next=(item.pad+1+Math.floor(r()*3))%4;
+   item.pad=group*4+next;
+   moved++;
+  }
+  item.velocity=A.clamp(item.velocity+(r()-.47)*(strong?.40:.24),.31,1);
   item.variant=((item.variant^((r()*0xffffffff)>>>0))>>>0);
   changed.push(item);
  }
- const extra=Math.max(scene.kit===3?1:2,Math.round(old.length*(strong?.36:.13)*(scene.kit===1?1.3:scene.kit===3?.62:1)));
- for(let i=0;i<extra;i++){
-  const group=r()<.23?0:r()<.45?1:r()<.7?2:3;
-  changed.push({step:Math.floor(r()*N),pad:group*4+Math.floor(r()*4),velocity:.38+r()*.48,variant:(r()*0xffffffff)>>>0});
+ // Guaranteed cross-register accents. Light mutates 3–8 notes; heavy ones add more.
+ const additions=Math.min(strong?14:8,Math.max(3,Math.round(previous.length*density*(strong?1.65:1))));
+ for(let i=0;i<additions;i++){
+  const groups=kit===3?[1,2,2,3,0]:kit===4?[2,1,2,3,0]:[0,1,2,3];
+  const group=groups[Math.floor(r()*groups.length)];
+  changed.push({step:Math.floor(r()*N),pad:group*4+Math.floor(r()*4),velocity:.43+r()*.42,variant:(r()*0xffffffff)>>>0});
  }
+ // Remove only excess duplicates; capped to keep mobile audio rendering responsive.
  scene.events=changed.slice(0,64);
- scene.seed=randomSeed();scene.color.broken=A.clamp(scene.color.broken+(r()-.44)*(strong?.62:.29),.05,.92);
- scene.color.space=A.clamp(scene.color.space+(r()-.49)*(strong?.44:.23),.05,.85);
- scene.color.shift=A.clamp(scene.color.shift+(r()-.5)*(strong?2:.65),-1.6,1.6);
- glitchUntil=performance.now()+(strong?1600:850);persist();message(strong?'MUTATION / HEAVY':'MUTATION / LIGHT');
+ scene.seed=randomSeed();
+ scene.color.broken=A.clamp(scene.color.broken+(r()-.43)*(strong?.62:.28),.07,.92);
+ scene.color.space=A.clamp(scene.color.space+(r()-.48)*(strong?.43:.22),.06,.85);
+ scene.color.shift=A.clamp(scene.color.shift+(r()-.5)*(strong?1.9:.6),-1.6,1.6);
+ glitchUntil=performance.now()+(strong?1200:720);
+ persist();
+ const wasPlaying=isPlaying;
+ if(!wasPlaying)startLoop(); // Immediately hear the result even from IDLE.
+ message(`${strong?'WILD':'MUTATE'} / ${previous.length}→${scene.events.length} NOTES`,1.8);
+ const m=$('btn-mutate');m.classList.add('is-mutating');
+ setTimeout(()=>m.classList.remove('is-mutating'),420);
 }
+
 function keep(){checkpoint=deepCopy(scene);keepUntil=performance.now()+1200;try{localStorage.setItem(KEEP,JSON.stringify(checkpoint));}catch{}message('SNAPSHOT KEPT');updateText();}
 function restore(){if(!checkpoint){message('NO SNAPSHOT YET');return;}scene=deepCopy(checkpoint);resetPlayhead();persist();message('SNAPSHOT RESTORED');}
 function fresh(){rememberUndo();scene={...newScene(),bpm:scene.bpm,kit:scene.kit};scene.events=generate(scene.seed);newUntil=performance.now()+1000;resetPlayhead();persist();message('NEW GROOVE');}
@@ -205,13 +236,21 @@ function bindControls(){
  $('btn-loop').addEventListener('click',()=>isPlaying?stopLoop():startLoop());
  $('tempo-down').addEventListener('click',()=>tempo(-2));$('tempo-up').addEventListener('click',()=>tempo(2));
  $('btn-keep').addEventListener('click',keep);$('btn-new').addEventListener('click',fresh);
- const restoreButton=$('btn-restore');let restoreDown=0;
- restoreButton.addEventListener('pointerdown',()=>{restoreDown=performance.now();});
- restoreButton.addEventListener('click',()=>{const long=restoreDown&&performance.now()-restoreDown>=650;restoreDown=0;if(long)undo();else restore();});
+ const restoreButton=$('btn-restore');let restoreDown=0,lastRestorePointer=0;
+ restoreButton.addEventListener('contextmenu',e=>e.preventDefault());
+ restoreButton.addEventListener('pointerdown',e=>{if(e.pointerType==='mouse'&&e.button!==0)return;restoreDown=performance.now();});
+ restoreButton.addEventListener('pointerup',()=>{if(!restoreDown)return;const long=performance.now()-restoreDown>=600;restoreDown=0;lastRestorePointer=performance.now();if(long)undo();else restore();});
+ restoreButton.addEventListener('pointercancel',()=>{restoreDown=0;});
+ restoreButton.addEventListener('click',()=>{if(performance.now()-lastRestorePointer<500)return;restore();});
  $('btn-tape').addEventListener('click',()=>tape?stopTape():startTape());
- const m=$('btn-mutate');let holdStart=0;
- m.addEventListener('pointerdown',()=>{holdStart=performance.now();});
- m.addEventListener('click',()=>{const strong=holdStart&&performance.now()-holdStart>=650;holdStart=0;mutate(strong);});
+ // Pointerup triggers the action directly (long press is not a dependable click on iOS).
+ // A following synthetic click is suppressed; keyboard activation still works.
+ const m=$('btn-mutate');let holdStart=0,lastPointer=0;
+ m.addEventListener('contextmenu',e=>e.preventDefault());
+ m.addEventListener('pointerdown',e=>{if(e.pointerType==='mouse'&&e.button!==0)return;holdStart=performance.now();});
+ m.addEventListener('pointerup',()=>{if(!holdStart)return;const strong=performance.now()-holdStart>=600;holdStart=0;lastPointer=performance.now();mutate(strong);});
+ m.addEventListener('pointercancel',()=>{holdStart=0;});
+ m.addEventListener('click',()=>{if(performance.now()-lastPointer<500)return;mutate(false);});
  $('btn-export').addEventListener('click',exportWav);
  $('btn-close-export').addEventListener('click',()=>{$('export-panel').hidden=true;});
  $('btn-share').addEventListener('click',async()=>{if(!wavFile)return;try{await navigator.share({files:[wavFile],title:'WRONG NUMBER LOOP'});}catch(err){if(err.name!=='AbortError')message('SHARE FAILED / USE DOWNLOAD',3);}});
@@ -309,101 +348,73 @@ async function stopTape(){
  }catch(err){console.error(err);$('export-status').textContent='TAPE EXPORT FAILED / '+String(err?.message||err).slice(0,90);message('TAPE EXPORT FAILED',4);}
  finally{finishRender();}
 }
-// Pixel LCD sprites: three tiny rabbits with short Game & Watch style animation.
-// Each has a 17x20 bitmap (hand-drawn, deliberately low-resolution).
-const rabbitBase=[
- '...###.......###...',
- '...####.....####..',
- '...####.....####..',
- '...####.....####..',
- '...####.....####..',
- '....##########....',
- '...############...',
- '..##############..',
- '.################.',
- '.################.',
- '.################.',
- '.################.',
- '..##############..',
- '...############...',
- '....##########....',
- '....##########....',
- '...############...',
- '...###.####.###...',
- '..###.......###...',
- '..###.......###...'
-];
-const rabbitSad=[
- '..###.........###.',
- '..####.......####',
- '..####.......####',
- '..####.......####',
- '...####.....####.',
- '....###########..',
- '...############..',
- '..##############.',
- '.################',
- '.################',
- '.################',
- '..##############.',
- '...############..',
- '....##########...',
- '....##########...',
- '...############..',
- '..####.####.####.',
- '..###.......###..',
- '..###.......###..',
- '.................'
-];
+// Three Game & Watch rabbits. All graphics are hand-coded pixels, no fonts or emojis.
+// Each state uses 2–4 stepped poses rather than smooth waveforms or animation assets.
 function paint(ctx,w,h){
  const now=performance.now(),bpm=scene.bpm,beatMs=60000/bpm;
- const phase=isPlaying?Math.floor(now/(beatMs/2)):(Math.floor(now/650));
- const glitch=now<glitchUntil,keeping=now<keepUntil,brandNew=now<newUntil,hit=pulseUntil.some(x=>x>now);
- const currentMode=displayMode();if($('lcd-mode').textContent!==currentMode)$('lcd-mode').textContent=currentMode;
+ const beat=Math.floor(now/(isPlaying?beatMs/2:640));
+ const glitch=now<glitchUntil,keeping=now<keepUntil,brandNew=now<newUntil;
+ const hit=pulseUntil.some(x=>x>now),mode=displayMode();
+ if($('lcd-mode').textContent!==mode)$('lcd-mode').textContent=mode;
  if(now>messageUntil){const neutral=tape?'TAPE / RECORDING':isPlaying?'PLAYING / TWO BARS':'TAP TO PLAY';if($('status-text').textContent!==neutral)$('status-text').textContent=neutral;}
- ctx.clearRect(0,0,w,h);ctx.fillStyle='#b9eb90';ctx.fillRect(0,0,w,h);
- const dark='#2a4930',medium='#688f52',lite='#9acb72';
- ctx.fillStyle=medium;ctx.globalAlpha=.1;
- for(let x=4;x<w;x+=7)for(let y=3;y<h;y+=7)ctx.fillRect(x,y,1,1);
+ const dark='#2a4930',light='#b9eb90',inner='#8bbc66',medium='#668a4b';
+ ctx.imageSmoothingEnabled=false;ctx.clearRect(0,0,w,h);ctx.fillStyle=light;ctx.fillRect(0,0,w,h);
+ // Dot paper texture remains stationary; no waveform or oscillogram.
+ ctx.globalAlpha=.11;ctx.fillStyle=medium;
+ for(let x=7;x<w;x+=9)for(let y=5;y<h;y+=9)ctx.fillRect(x,y,1,1);
  ctx.globalAlpha=1;
- const pix=(x,y,size=2,c=dark)=>{ctx.fillStyle=c;ctx.fillRect(Math.round(x),Math.round(y),size,size);};
- const count=3,scale=3.45,spacing=87,start=29;
- for(let n=0;n<count;n++){
-  const offsetPhase=phase+(n===1?1:n===2?2:0);
-  let b=offsetPhase%4,dx=b===1?-2:b===3?2:0,dy=(b===0||b===2)?-4:0;
-  if(!isPlaying&&!hit){dy=offsetPhase%3===0?-2:0;dx=0;}
+ const s=2.9,draw=(x,y,pw,ph,color=dark)=>{ctx.fillStyle=color;ctx.fillRect(Math.round(x*s),Math.round(y*s),Math.round(pw*s),Math.round(ph*s));};
+ // Each bunny occupies a small 23x28 pixel world, with two ears, plump cheeks, paws and tail.
+ const bunny=(px,py,n,pose)=>{
+  const x=px/s,y=py/s;const p=(a,b,c,d,col=dark)=>draw(x+a,y+b,c,d,col);
+  const hopped=pose%4===1||pose%4===3,lean=pose%4===1?-1:pose%4===3?1:0;
+  // The silhouette is an outline, not a solid blob: internal space defines the face.
+  const earLeft=(n===1&&pose%4===2)?-2:0;
+  p(4+earLeft,1,6,10);p(6+earLeft,0,4,2);p(6+earLeft,2,2,7,inner);
+  p(15,1+(n===2&&hopped?2:0),6,10);p(16,0+(n===2&&hopped?2:0),4,2);p(17,2+(n===2&&hopped?2:0),2,7,inner);
+  // Head and cheek outline.
+  p(5,9,15,1);p(3,10,19,2);p(2,12,21,7);p(4,19,17,2);p(6,21,13,1);
+  p(4,12,17,6,light);p(5,10,15,2,light);p(6,18,13,2,light);
+  p(3,15,2,2,inner);p(20,15,2,2,inner);
+  // Wide spaced button eyes, or deliberately silly MUTATE face.
+  const blink=(Math.floor(now/230+13*n)%31===0);
+  if(glitch && n===(beat%3)){
+   p(7,13,3,1);p(8,12,1,3);p(16,13,3,1);p(17,12,1,3);
+   p(12,17,2,2);
+  }else if(!blink){p(7,13,2,3);p(16,13,2,3);p(8,13,1,1,light);p(17,13,1,1,light);}
+  else {p(7,15,2,1);p(16,15,2,1);}
+  p(12,15,2,1);p(11,17,1,1);p(14,17,1,1);
+  p(6,17,2,1,inner);p(18,17,2,1,inner);
+  // Tiny rounded torso: much smaller than the head for chibi proportions.
+  p(7+lean,22,12,5);p(8+lean,27,10,1);p(9+lean,22,8,5,light);
+  p(6+lean,23,3,3);p(18+lean,23,3,3);
+  if(hopped){p(4+lean,20,4,3);p(19+lean,22,4,3);p(8+lean,28,4,2);p(16+lean,27,4,2);}
+  else {p(4+lean,23,4,3);p(19+lean,20,4,3);p(7+lean,28,5,2);p(15+lean,28,5,2);}
+  if(n===0){ // Pink-bow silhouette, expressed in LCD green.
+   p(18,9,3,3);p(22,8,3,3);p(21,10,2,2,inner);
+  } else if(n===1){ // Forelock makes the middle bunny distinct.
+   p(11,9,4,2);p(13,10,2,2);
+  } else { // An off-center cheek mole.
+   p(20,18,1,1);
+  }
+ };
+ const start=[28,129,230];
+ for(let n=0;n<3;n++){
+  const phase=keeping?0:glitch?(beat+n*2)%4:brandNew?(beat+3-n)%4:(beat+n)%4;
+  let dy=(phase===1||phase===3)?-3:0,dx=phase===1?-2:phase===3?2:0;
+  if(!isPlaying&&!hit&&!glitch&&!brandNew){dy=n===1&&beat%3===0?-1:0;dx=0;}
   if(keeping){dy=0;dx=0;}
-  if(brandNew){dx=[-4,4,0][n];dy=offsetPhase%2===0?-3:2;}
-  if(glitch){dx=(n===1?6:-3);dy=n===2?-7:1;}
-  const source=(b===1&&!keeping)?rabbitSad:rabbitBase;
-  const x0=start+n*spacing+dx,y0=10+dy;
-  for(let y=0;y<source.length;y++){
-   const line=source[y];
-   for(let x=0;x<line.length;x++)if(line[x]==='#')pix(x0+x*scale,y0+y*scale,2.8,dark);
-  }
-  // Facial pixels are cut out of the filled head like a classic LCD sprite.
-  const faceY=y0+9*scale,faceX=x0,screen='#b9eb90';
-  const blinking=(Math.floor(now/780+n*3)%17===0);
-  for(const eye of [5,11]){
-   // Off-white pixels create the characteristic tiny dot-eye sockets.
-   pix(faceX+eye*scale,faceY,6,screen);
-   if(!blinking)pix(faceX+eye*scale+1,faceY+1,2,dark);
-  }
-  // A little oval muzzle, small pink-less cheeks, and a crooked mouth.
-  pix(faceX+8*scale-4,faceY+3*scale,11,screen);
-  pix(faceX+8*scale,faceY+3*scale,3,dark);
-  pix(faceX+8*scale-2,faceY+4*scale,6,dark);
-  if(glitch&&n===1){pix(faceX+5*scale,faceY,10,dark);pix(faceX+11*scale,faceY,10,dark);}
-  // Feet alternate; arms move in the same frame language.
-  const armY=y0+14*scale+(b%2?2:0);
-  pix(x0+0*scale,armY,7,dark);pix(x0+16*scale,armY,7,dark);
-  if(b%2===1){pix(x0+3*scale,y0+19*scale,11,lite);pix(x0+12*scale,y0+19*scale,7,dark);}
-  if(n===0&&phase%4===0)pix(x0+53,y0+9,3,medium);
+  bunny(start[n]+dx,7+dy,n,phase);
  }
- // LCD indicators (not audio waveforms).
- for(let i=0;i<8;i++)pix(13+i*11,h-8,(isPlaying&&Math.floor(visualBeat/4)===i)?5:2,(isPlaying&&Math.floor(visualBeat/4)===i)?dark:medium);
- for(let i=0;i<3;i++){const on=i===scene.kit%3;pix(270+i*12,h-8,on?5:3,on?dark:medium);}
- if(glitch){for(let i=0;i<4;i++)pix(21+((i*79+phase*11)%273),10+i*17,9,dark);}
+ // Small stepped indicators mark the current quarter-note and kit only.
+ for(let i=0;i<8;i++){
+  const active=isPlaying&&Math.floor(visualBeat/4)===i;
+  ctx.fillStyle=active?dark:inner;ctx.fillRect(12+i*11,h-6,active?5:3,active?4:2);
+ }
+ for(let i=0;i<A.KIT_TITLES.length;i++){
+  ctx.fillStyle=i===scene.kit?dark:inner;ctx.fillRect(w-13-(A.KIT_TITLES.length-i)*8,h-6,i===scene.kit?5:3,3);
+ }
+ if(glitch){ctx.fillStyle=medium;ctx.fillRect(155,8,7,2);ctx.fillRect(70,80,9,2);}
 }
 let fallbackFrame=0;
 function startCanvasFallback(){const canvas=$('display-fallback'),context=canvas.getContext('2d');if(!context)return;let last=0;const frame=(now)=>{if(canvas.hidden)return;if(now-last>65){paint(context,320,100);last=now;}fallbackFrame=requestAnimationFrame(frame);};fallbackFrame=requestAnimationFrame(frame);}

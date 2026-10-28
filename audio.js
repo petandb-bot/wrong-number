@@ -113,17 +113,17 @@ function audioBufferToWav(buffer,startFrame,endFrame){
 }
 /* Three additional synthesized instruments. All voices use the same graph and
    offline render paths; nothing is streamed, sampled or downloaded. */
-const KIT_TITLES=['CANDY KIT','TOY MALFUNCTION','SUGAR POISON','GHOST OFFICE'];
-const KIT_SHORT=['CANDY','TOY','SUGAR','GHOST'];
+const KIT_TITLES=['CANDY KIT','TOY MALFUNCTION','SUGAR POISON','ROTTEN CARROT','WORM PARADE'];
+const KIT_SHORT=['CANDY','TOY','SUGAR','CARROT','WORMS'];
 function scheduleKitVoice(g,pad,time,params={}){
- const kit=clamp(Math.floor(Number(params.kit)||0),0,3);
+ const kit=clamp(Math.floor(Number(params.kit)||0),0,4);
  if(kit===0)return scheduleVoice(g,pad,time,params); // Preserve v0.1.4's proven synth voice.
  const id=pad|0,t=Math.max(.001,time),r=rng(((params.seed||1)^Math.imul((id+23),(kit+1)*0x9e3779b1))>>>0);
  const rand=()=>r(),color=params.color||{},hold=!!params.hold,fire=!!params.fire;
  const broken=clamp(color.broken??.24,0,1),space=clamp(color.space??.26,0,1);
  const trans=clamp((color.shift||0)*1.7+(fire?rand()-.5:0)*4,-7,7);
  const p=Math.pow(2,trans/12),vol=clamp(params.velocity??.85,.18,1.1)*(hold?.70:1);
- const v=bus(g,t,vol*(kit===3?.82:.73),kit===2?.24+space*.25:kit===3?.20+space*.19:.07+space*.13,kit===1?.035:kit===2?.14:.08);
+ const v=bus(g,t,vol*(kit===3?.77:kit===4?.68:.73),kit===2?.24+space*.25:kit===3?.09+space*.17:kit===4?.15+space*.18:.07+space*.13,kit===1?.035:kit===2?.14:kit===3?.075:.06);
  const osc=(f,d,a,kind='sine',to=f,offset=0)=>oscillator(g,v,t+offset,{f:f*p,endF:to*p,d,a,type:kind,attack:kind==='sawtooth'?.002:.004});
  const hit=(d,a,hp=2400,offset=0)=>noise(g,v,t,{d,a,hp,offset:rand()*.87+offset});
  const band=(d,a,f,q=.8)=>noise(g,v,t,{d,a,bp:f,q,offset:rand()*.81});
@@ -179,30 +179,55 @@ function scheduleKitVoice(g,pad,time,params={}){
    if(n===2){band(.76,.18,1100,.42);osc(295,.39,.075,'triangle',232,.1);}
    if(n===3){[164,247,369,515].forEach((q,i)=>osc(q,.84+i*.09,.074/(1+i*.25),'sine',q*f(.97),i*.029));}
   }
- }else{ // GHOST OFFICE — muted machine room, hollow rhythm, distant signals
+ }else if(kit===3){ // ROTTEN CARROT — sticky rubber, sour organics and insect-like chirps.
   if(id<4){
-   if(id===0){osc(105,.50,.51,'sine',45);osc(53,.26,.17,'triangle',44);hit(.017,.07,2500);}
-   if(id===1){osc(67,.67,.30,'sine',43);band(.15,.06,230,.7);}
-   if(id===2){mod(92,1.63,85,.35,.24,.78);osc(46,.42,.23,'sine',44);}
-   if(id===3){osc(152,.15,.14,'triangle',52);mod(78,2.8,170,.50,.27,.62);}
+   if(id===0){osc(132,.31,.46,'sine',43);mod(92,2.32,180,.29,.24,.43);hit(.014,.06,4000);}
+   if(id===1){mod(78,1.78,210,.52,.31,.62);osc(42,.45,.21,'triangle',39);}
+   if(id===2){osc(102,.26,.27,'sawtooth',63);mod(88,5.4,142,.41,.20,.68);}
+   if(id===3){mod(186,3.37,275,.45,.32,.35);osc(61,.38,.13,'sine',39);}
   }else if(id<8){
    const n=id-4;
-   if(n===0){hit(.028,.13,4500);osc(1010,.019,.08,'sine',610);}
-   if(n===1){band(.10,.20,710,3.2);osc(325,.061,.13,'triangle',300);}
-   if(n===2){[385,553,849].forEach((q,i)=>osc(q,.11+i*.04,.10-i*.02,'sine',q*f(.97)));}
-   if(n===3){band(.19,.20,1640,1.15);osc(151,.10,.12,'sine',104);}
+   if(n===0){band(.054,.27,2600,3.1);osc(890,.033,.13,'triangle',360);}
+   if(n===1){mod(430,2.6,165,.13,.27,.36);hit(.027,.10,3200);}
+   if(n===2){band(.13,.29,1750,1.5);osc(681,.13,.10,'square',415);}
+   if(n===3){hit(.068,.24,4800);mod(210,1.3,110,.11,.20,.63);}
   }else if(id<12){
    const n=id-8;
-   if(n===0){mod(123,2.27,75,.24,.19,.89);band(.045,.07,960,1.3);}
-   if(n===1){[532,812].forEach((q,i)=>osc(q,.49+i*.11,.11,'sine',q*f(.99)));}
-   if(n===2){for(let i=0;i<3;i++){hit(.014,.16,1300+i*1400);osc(239+i*143,.035,.07,'square',170+i*60,i*.082);}}
-   if(n===3){band(.24,.21,1050,1.1);osc(310,.07,.07,'triangle',110);}
+   if(n===0){for(let i=0;i<3;i++)mod(166+i*95,2.8,105,.078,.14,.54,i*.058);}
+   if(n===1){[317,494,713].forEach((q,i)=>osc(q,.32+i*.065,.10,'triangle',q*(.76+rand()*.22),i*.018));}
+   if(n===2){for(let i=0;i<6;i++)osc(360+rand()*1300,.018+rand()*.02,.095,'square',125+rand()*470,i*.026);}
+   if(n===3){band(.22,.21,950,2.2);for(let i=0;i<4;i++)mod(500+i*110,1.63,50,.042,.076,.41,i*.042);}
   }else{
    const n=id-12;
-   if(n===0){band(.59,.22,540,.68);osc(324,.26,.06,'sine',175,.31);}
-   if(n===1){mod(208,1.18,87,.98,.18,.90);osc(106,.67,.075,'triangle',108);}
-   if(n===2){band(.82,.20,820,.43);osc(176,.47,.065,'sine',141,.22);}
-   if(n===3){[84,126,189,282].forEach((q,i)=>osc(q,.95+i*.08,.08,'sine',q*f(.985),i*.038));}
+   if(n===0){band(.51,.19,930,.61);osc(460,.29,.10,'triangle',190,.18);}
+   if(n===1){mod(195,2.27,150,.69,.25,.77);osc(102,.55,.08,'triangle',87);}
+   if(n===2){band(.64,.20,2300,.53);for(let i=0;i<3;i++)osc(830+i*117,.13,.052,'sine',420+i*55,i*.12);}
+   if(n===3){[104,151,237,355].forEach((q,i)=>osc(q,.76+i*.13,.079,'triangle',q*f(.9),i*.035));}
+  }
+ }else{ // WORM PARADE — rubber chirps, irregular chirrup runs, and crooked carnival tones.
+  if(id<4){
+   if(id===0){osc(165,.30,.39,'sine',47);mod(128,3.44,135,.34,.28,.39);}
+   if(id===1){osc(89,.50,.34,'triangle',37);mod(67,6.2,115,.22,.20,.45);}
+   if(id===2){mod(119,4.1,240,.37,.34,.58);osc(52,.34,.19);}
+   if(id===3){osc(266,.20,.20,'square',60);mod(136,3.8,260,.33,.26,.54);}
+  }else if(id<8){
+   const n=id-4;
+   if(n===0){hit(.021,.23,6200);osc(2170,.024,.09,'square',420);}
+   if(n===1){for(let i=0;i<2;i++)mod(460+i*275,3.15,160,.067,.23,.5,i*.06);}
+   if(n===2){[590,1090,1653].forEach((q,i)=>osc(q,.10+i*.025,.10,'triangle',q*(.41+i*.08)));}
+   if(n===3){band(.15,.25,1900,.72);osc(215,.09,.11,'sine',125);}
+  }else if(id<12){
+   const n=id-8;
+   if(n===0){for(let i=0;i<4;i++)mod(340+i*93,2.74,180,.044,.11,.63,i*.054);}
+   if(n===1){[650,900,1210].forEach((q,i)=>osc(q,.23+i*.07,.12,'square',q*(.76+rand()*.11),i*.011));}
+   if(n===2){for(let i=0;i<7;i++)osc(210+rand()*1430,.013+rand()*.02,.082,'triangle',90+rand()*300,i*.023);}
+   if(n===3){for(let i=0;i<4;i++){hit(.014,.13,1700+i*330);osc(650+i*190,.036,.085,'square',290,i*.05);}}
+  }else{
+   const n=id-12;
+   if(n===0){band(.38,.22,710,.7);osc(515,.22,.10,'square',180,.14);}
+   if(n===1){mod(331,3.5,220,.65,.19,.88);osc(165,.57,.07,'triangle');}
+   if(n===2){band(.59,.16,1610,.41);for(let i=0;i<3;i++)osc(715+i*150,.13,.08,'triangle',320,i*.1);}
+   if(n===3){[145,215,324,485].forEach((q,i)=>osc(q,.75+i*.11,.077,'triangle',q*(.93+rand()*.06),i*.017));}
   }
  }
  return v;

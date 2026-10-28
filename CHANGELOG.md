@@ -1,17 +1,26 @@
-# v0.1.5 — LITTLE ACCIDENTS
+# CHANGELOG
 
-- Rebuilt UI as a compact, candy-toxic, 16-pad retro instrument with minimal one-line title and reduced decorative copy.
-- LCD now prioritizes kit, mode (READY / LOOPING / MUTATING / SAVED / TAPE REC), message and BPM/bar position.
-- Replaced waveform/large bunny with three tiny Game & Watch-style pixel rabbits with alternating dance frames, blinks and mutate glitches.
-- Replaced mixed unicode/emoji motifs with 16 original, visually consistent hand-drawn SVG sticker icons.
-- Removed unstable MIC, FILE, SAMPLE toggle and associated live/import code, without removing historical user-imported browser data.
-- Added four distinct internally synthesized kits: CANDY KIT (original v0.1.4 sounds), TOY MALFUNCTION, SUGAR POISON and GHOST OFFICE.
-- Added kit-aware groove generation and mutation; kit selection persists as part of the session/checkpoint.
-- Kept STOP / LOOP, TAPE, KEEP / RESTORE, NEW, tempo, live pads and both WAV outputs.
-- TAPE captures kit information per note, so a mid-take kit change is faithfully exported.
-- Preserved existing scene and checkpoint storage keys and interprets older scenes as CANDY KIT.
-- Implemented CSS compact mode and safe-area padding for mobile home-screen use.
-- Bumped PWA cache to v0.1.5. Updated app icons to show the rabbit trio.
-- Manual and README are in English.
+## v0.1.6 — ROTTEN CARROT
 
-Validation: Chromium browser functional regression, WAV checks, 4x16-voice offline output levels, and 320×568 / 375×667 / 390×740 / 430×800 screenshots. iPhone Safari not hardware-tested.
+### Fixed
+- MUTATE from STOP now starts the mutated loop, rather than quietly editing an inactive pattern.
+- Strengthened note-position and instrument replacement for audible, repeatable changes even on sparse patterns.
+- Long-press MUTATE on touch devices no longer depends on an iOS-generated click following the press; keyboard click remains supported.
+- The MUTATE status provides an event count and the button briefly responds visually.
+
+### Improved
+- GHOST OFFICE is replaced by ROTTEN CARROT (sour, rubbery, unsettling sound palette).
+- Added WORM PARADE as a fifth, deliberately weird kit.
+- Replaced previous rabbit silhouettes with larger chibi-style pixel rabbits using contrasting interiors, faces, different personalities and stepwise poses.
+- Updated PWA icons to reflect the new characters; refreshed the offline cache.
+- Updated the English MANUAL and version number.
+
+### Preserved
+- Original CANDY instruments and TOY / SUGAR signal chains.
+- 16-pad controls, loop timing, KEEP/RESTORE/undo, TAPE and WAV output.
+- Saved patterns and earlier session keys (kit #4 changes from GHOST OFFICE to ROTTEN CARROT by design).
+
+### Validation
+- Chromium tests: repeated short/long mutations, STOP → MUTATE auto-play, 5-kit switching, KEEP/RESTORE, TAPE and WAV export, and 320×568 through 430×800 viewports.
+- Offline Web Audio: 80 voices audible and no clipping beyond test limit.
+- iPhone Safari and Home Screen real-device behavior remains unverified.
