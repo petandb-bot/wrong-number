@@ -1,7 +1,9 @@
-# v0.1.8.1 — JAPANESE QUICK GUIDE
+# v0.1.9 — BLANK BEAT
 
-- アプリ内の使い方を短い日本語へ変更。
-- READMEの操作説明も簡潔な日本語へ変更。
-- UI、音色、各演奏機能はv0.1.8のまま。
-- 更新反映のため、CSS/JSとService Workerのキャッシュ識別子を更新。
-- JS/CSS/HTML内に日本語の補足コメントはなかったため、追加・変更なし。
+- BLANK: clear pattern, start a silent two-bar clock and arm DUB automatically.
+- Empty scenes never auto-generate notes on LOOP or WAV export.
+- Replaced KEEP with BLANK and RESTORE with one-tap UNDO.
+- NEW confirms every action with a brief lime-green button flash.
+- Redrew the three LCD rabbits as full-body pixel sprites; added occasional falling and reaction poses.
+- Retained all five sound kits, LOOP control behavior, MUTATE, DUB, TAPE and WAV export.
+- Updated PWA resources and retained previous scene storage keys.

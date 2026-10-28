@@ -1,11 +1,7 @@
-/* WRONG NUMBER v0.1.8 — PLAYABLE SPACE / non-destructive jam
- * Timing: Web Audio's currentTime, with a 25ms look-ahead scheduler.
- * Screen: p5.js v1.11.13 when available, local Canvas fallback offline.
- * Playback: all synthesis and mutations remain local to the browser.
- */
+/* WRONG NUMBER v0.1.9 — BLANK BEAT */
 (()=>{'use strict';
 const A=window.WrongAudio,I=window.WrongIcons; if(!A||!I){document.body.textContent='AUDIO ENGINE FAILED';return;}
-const $=id=>document.getElementById(id), N=32, STORE='wrong-number-session-0.1', KEEP='wrong-number-kept-0.1';
+const $=id=>document.getElementById(id), N=32, STORE='wrong-number-session-0.1';
 const MAX_TAPE_SECONDS=30, TAPE_TAIL_SECONDS=2.5;
 const randomSeed=()=>((Math.random()*0xffffffff)>>>0);
 const deepCopy=v=>JSON.parse(JSON.stringify(v));
@@ -13,9 +9,9 @@ const getSaved=k=>{try{return JSON.parse(localStorage.getItem(k));}catch{return 
 const newScene=()=>({bpm:92,seed:randomSeed(),groove:'open',color:{broken:.24,space:.27,shift:0},kit:0,events:[]});
 function validateScene(raw){
  if(!raw||typeof raw!=='object'||!Array.isArray(raw.events))return null;
- return {bpm:A.clamp(Number(raw.bpm)||92,48,180),seed:(raw.seed>>>0)||3,groove:['open','full','classic'].includes(raw.groove)?raw.groove:'classic',kit:A.clamp(Math.floor(Number(raw.kit)||0),0,4),color:{broken:A.clamp(Number(raw.color?.broken)||.18,0,1),space:A.clamp(Number(raw.color?.space)||.25,0,1),shift:A.clamp(Number(raw.color?.shift)||0,-2,2)},events:raw.events.slice(0,64).filter(e=>Number.isInteger(e.step)&&e.step>=0&&e.step<N&&Number.isInteger(e.pad)&&e.pad>=0&&e.pad<16).map(e=>({step:e.step,pad:e.pad,velocity:A.clamp(Number(e.velocity)||.85,.2,1),variant:(e.variant>>>0)||1,origin:e.origin==='dub'?'dub':e.origin==='auto'?'auto':'legacy'}))};
+ return {bpm:A.clamp(Number(raw.bpm)||92,48,180),seed:(raw.seed>>>0)||3,groove:['open','full','classic','empty'].includes(raw.groove)?raw.groove:'classic',kit:A.clamp(Math.floor(Number(raw.kit)||0),0,4),color:{broken:A.clamp(Number(raw.color?.broken)||.18,0,1),space:A.clamp(Number(raw.color?.space)||.25,0,1),shift:A.clamp(Number(raw.color?.shift)||0,-2,2)},events:raw.events.slice(0,64).filter(e=>Number.isInteger(e.step)&&e.step>=0&&e.step<N&&Number.isInteger(e.pad)&&e.pad>=0&&e.pad<16).map(e=>({step:e.step,pad:e.pad,velocity:A.clamp(Number(e.velocity)||.85,.2,1),variant:(e.variant>>>0)||1,origin:e.origin==='dub'?'dub':e.origin==='auto'?'auto':'legacy'}))};
 }
-let scene=validateScene(getSaved(STORE))||newScene(),checkpoint=validateScene(getSaved(KEEP));
+let scene=validateScene(getSaved(STORE))||newScene();
 let live=null,engine=null,isPlaying=false,scheduler=null,nextStep=0,nextTick=0,loopStarted=0,cycleAnchor=0,perfCounter=0,lastPadAt=new Map(),recent=[],downPointers=new Map(),pulseUntil=new Array(16).fill(0),lastPad=-1,displayMessage='READY / TOUCH A PAD',messageUntil=0,renderBusy=false,wavUrl=null,wavFile=null,tape=null,tapeClock=null,undoStack=[];
 // JAM is always live and non-destructive. DUB is armed explicitly and stores
 // quantized events for the NEXT pass, never doubling the currently played tap.
@@ -23,7 +19,7 @@ let dubArmed=false,pendingDub=[],dubUndoSaved=false,dubSessionCount=0,backingGra
 
 // The previous session and 16-pad layout remain compatible with v0.1.4.
 let stateAt=()=>live?.currentTime??0;
-let transientStatus='READY',glitchUntil=0,keepUntil=0,newUntil=0,visualBeat=0;
+let glitchUntil=0,blankUntil=0,newUntil=0,visualBeat=0,newFlashTimer=null;
 const kitLabel=()=>A.KIT_TITLES[scene.kit]||A.KIT_TITLES[0];
 function updateKitUi(){
  const name=kitLabel();
@@ -39,9 +35,9 @@ const stepSeconds=()=>60/scene.bpm/4,cycleSeconds=()=>N*stepSeconds();
 function displayMode(){
  if(tape)return 'TAPE REC';
  if(performance.now()<glitchUntil)return 'MUTATING';
- if(performance.now()<keepUntil)return 'SAVED';
+ if(performance.now()<blankUntil)return 'BLANK / BUILD';
  if(performance.now()<newUntil)return 'NEW BEAT';
- return dubArmed?'DUB ●':isPlaying?'JAM / LOOP':'READY';
+ return dubArmed?(scene.groove==='empty'?'BUILD ●':'DUB ●'):isPlaying?(scene.groove==='empty'?'BLANK / LOOP':'JAM / LOOP'):(scene.groove==='empty'?'BLANK / READY':'READY');
 }
 function updateText(){
  $('tempo-value').innerHTML=String(scene.bpm).padStart(3,'0')+' <small>BPM</small>';
@@ -51,7 +47,7 @@ function updateText(){
  $('btn-dub').setAttribute('aria-pressed',String(dubArmed));
  $('btn-dub').setAttribute('aria-label',dubArmed?'Stop overdub recording':'Start overdub recording');
  $('btn-dub').querySelector('small').textContent=dubArmed?'● RECORDING':'OVERDUB';
- $('live-message').textContent=`${dubArmed?'● DUB +'+pendingDub.length:isPlaying?'JAM':'READY'} / ${A.KIT_SHORT[scene.kit]} / ${scene.events.length.toString().padStart(2,'0')} HITS / ${scene.groove==='full'?'FULL':'SPACE'}`; 
+ $('live-message').textContent=`${dubArmed?'● DUB +'+pendingDub.length:isPlaying?'JAM':'READY'} / ${A.KIT_SHORT[scene.kit]} / ${scene.events.length.toString().padStart(2,'0')} HITS / ${scene.groove==='full'?'FULL':scene.groove==='empty'?'BLANK':'SPACE'}`; 
  updateKitUi();
 }
 function message(s,seconds=1.7){displayMessage=s;messageUntil=performance.now()+seconds*1000;$('status-text').textContent=s;updateText();}
@@ -285,7 +281,7 @@ function captureRecent(){
 function stopLoop(){if(dubArmed){commitDub();dubArmed=false;dubUndoSaved=false;}isPlaying=false;clearInterval(scheduler);scheduler=null;nextStep=0;message('LOOP STOPPED / JAM READY');updateText();}
 function startLoop(){
  if(!ensureAudio())return;
- if(scene.events.length===0)scene.events=captureRecent();
+ if(scene.events.length===0&&scene.groove!=='empty')scene.events=captureRecent();
  isPlaying=true;nextStep=0;nextTick=stateAt()+.08;loopStarted=nextTick;cycleAnchor=nextTick;
  scheduler=setInterval(scheduleAhead,25);scheduleAhead();persist();message('LOOP / 2 BARS');updateText();
 }
@@ -314,6 +310,7 @@ function undo(){
 function mutate(strong=false){
  if(dubArmed)setDub(false);
  rememberUndo();
+ if(!scene.events.length&&scene.groove==='empty'){message('BLANK / RECORD SOME PADS FIRST',2);return;}
  if(!scene.events.length)scene.events=captureRecent();
  const original=scene.events.map(e=>({...e}));
  const r=A.rng((scene.seed^randomSeed())>>>0);
@@ -365,9 +362,29 @@ function mutate(strong=false){
  setTimeout(()=>m.classList.remove('is-mutating'),420);
 }
 
-function keep(){checkpoint=deepCopy(scene);keepUntil=performance.now()+1200;try{localStorage.setItem(KEEP,JSON.stringify(checkpoint));}catch{}message('SNAPSHOT KEPT');updateText();}
-function restore(){if(dubArmed){pendingDub=[];dubArmed=false;dubUndoSaved=false;}if(!checkpoint){message('NO SNAPSHOT YET');return;}scene=deepCopy(checkpoint);resetPlayhead();persist();message('SNAPSHOT RESTORED');}
-function fresh(full=false){if(dubArmed)setDub(false);rememberUndo();scene={...newScene(),bpm:scene.bpm,kit:scene.kit,groove:full?'full':'open'};scene.events=generate(scene.seed,full);newUntil=performance.now()+1000;resetPlayhead();persist();message(full?'FULL BEAT / LISTEN':'SPACE BEAT / YOUR TURN',2);}
+function flashNew(){
+ const button=$('btn-new');button.classList.remove('is-new-flash');void button.offsetWidth;
+ button.classList.add('is-new-flash');clearTimeout(newFlashTimer);
+ newFlashTimer=setTimeout(()=>button.classList.remove('is-new-flash'),430);
+}
+function fresh(full=false){
+ if(dubArmed)setDub(false);
+ rememberUndo();scene={...newScene(),bpm:scene.bpm,kit:scene.kit,groove:full?'full':'open'};
+ scene.events=generate(scene.seed,full);newUntil=performance.now()+1000;
+ flashNew();resetPlayhead();persist();message(full?'FULL BEAT / LISTEN':'SPACE BEAT / YOUR TURN',2);
+}
+function blank(){
+ if(renderBusy){message('FINISH EXPORT FIRST',2);return;}
+ rememberUndo();
+ // BLANK clears the musical pattern but keeps the chosen kit and tempo.
+ scene={...newScene(),bpm:scene.bpm,kit:scene.kit,groove:'empty',events:[]};
+ recent=[];pendingDub=[];dubArmed=false;dubUndoSaved=false;dubSessionCount=0;
+ blankUntil=performance.now()+1400;
+ if(isPlaying)resetPlayhead();else startLoop();
+ if(!isPlaying){message('AUDIO / TAP BLANK AGAIN',3);persist();return;}
+ setDub(true);persist();message('BLANK / TAP PADS TO BUILD',2.4);
+}
+
 function tempo(delta){if(dubArmed)setDub(false);scene.bpm=A.clamp(scene.bpm+delta,48,180);resetPlayhead();persist();message(`${scene.bpm} BPM`,.8);}
 function bindControls(){
  $('btn-source').addEventListener('click',()=>setKit(scene.kit+1));
@@ -413,7 +430,7 @@ function bindControls(){
   setDub(!dubArmed);
  });
  $('tempo-down').addEventListener('click',()=>tempo(-2));$('tempo-up').addEventListener('click',()=>tempo(2));
- $('btn-keep').addEventListener('click',keep);
+ $('btn-blank').addEventListener('click',blank);
  // Short NEW = playable space; deliberate long hold = busy full demo groove.
  const newButton=$('btn-new');let newDown=0,lastNewPointer=0;
  newButton.addEventListener('contextmenu',e=>e.preventDefault());
@@ -421,12 +438,7 @@ function bindControls(){
  newButton.addEventListener('pointerup',()=>{if(!newDown)return;const full=performance.now()-newDown>=620;newDown=0;lastNewPointer=performance.now();fresh(full);});
  newButton.addEventListener('pointercancel',()=>{newDown=0;});
  newButton.addEventListener('click',()=>{if(performance.now()-lastNewPointer<650)return;fresh(false);});
- const restoreButton=$('btn-restore');let restoreDown=0,lastRestorePointer=0;
- restoreButton.addEventListener('contextmenu',e=>e.preventDefault());
- restoreButton.addEventListener('pointerdown',e=>{if(e.pointerType==='mouse'&&e.button!==0)return;restoreDown=performance.now();});
- restoreButton.addEventListener('pointerup',()=>{if(!restoreDown)return;const long=performance.now()-restoreDown>=600;restoreDown=0;lastRestorePointer=performance.now();if(long)undo();else restore();});
- restoreButton.addEventListener('pointercancel',()=>{restoreDown=0;});
- restoreButton.addEventListener('click',()=>{if(performance.now()-lastRestorePointer<500)return;restore();});
+ $('btn-undo').addEventListener('click',undo);
  $('btn-tape').addEventListener('click',()=>tape?stopTape():startTape());
  // Pointerup triggers the action directly (long press is not a dependable click on iOS).
  // A following synthetic click is suppressed; keyboard activation still works.
@@ -469,6 +481,7 @@ function finishRender(){renderBusy=false;$('btn-export').disabled=false;$('btn-t
 async function exportWav(){
  if(renderBusy){message('FINISH EXPORT FIRST',3);return;}
  if(tape){message('STOP TAPE BEFORE LOOP EXPORT',3);return;}
+ if(!scene.events.length&&scene.groove==='empty'){message('BLANK / ADD NOTES BEFORE EXPORT',2.5);return;}
  if(!scene.events.length){scene.events=captureRecent();persist();}
  const snapshot=deepCopy(scene); // Freeze kit, pattern and color during export.
  prepareRender('RENDERING LOOP / WAV...');message('RENDERING LOOP',3);
@@ -543,10 +556,10 @@ async function stopTape(){
 // Three Game & Watch rabbits. All graphics are hand-coded pixels, no fonts or emojis.
 // Each state uses 2–4 stepped poses rather than smooth waveforms or animation assets.
 function paint(ctx,w,h){
- const now=performance.now(),bpm=scene.bpm,beatMs=60000/bpm;
+ const now=performance.now();
  // Align visual pose transitions to the AudioContext clock while LOOP runs.
  const beat=isPlaying?Math.floor(Math.max(0,(stateAt()-cycleAnchor)/stepSeconds())/2):Math.floor(now/640);
- const glitch=now<glitchUntil,keeping=now<keepUntil,brandNew=now<newUntil;
+ const glitch=now<glitchUntil,building=now<blankUntil,brandNew=now<newUntil;
  const hit=pulseUntil.some(x=>x>now),mode=displayMode();
  if($('lcd-mode').textContent!==mode)$('lcd-mode').textContent=mode;
  if(now>messageUntil){const neutral=tape?'TAPE / RECORDING':dubArmed?`● OVERDUB / ${pendingDub.length} QUEUED`:isPlaying?'JAM / PLAY ALONG':'TAP TO PLAY';if($('status-text').textContent!==neutral)$('status-text').textContent=neutral;}
@@ -556,48 +569,52 @@ function paint(ctx,w,h){
  ctx.globalAlpha=.11;ctx.fillStyle=medium;
  for(let x=7;x<w;x+=9)for(let y=5;y<h;y+=9)ctx.fillRect(x,y,1,1);
  ctx.globalAlpha=1;
- const s=2.9,draw=(x,y,pw,ph,color=dark)=>{ctx.fillStyle=color;ctx.fillRect(Math.round(x*s),Math.round(y*s),Math.round(pw*s),Math.round(ph*s));};
- // Each bunny occupies a small 23x28 pixel world, with two ears, plump cheeks, paws and tail.
- const bunny=(px,py,n,pose)=>{
-  const x=px/s,y=py/s;const p=(a,b,c,d,col=dark)=>draw(x+a,y+b,c,d,col);
-  const hopped=pose%4===1||pose%4===3,lean=pose%4===1?-1:pose%4===3?1:0;
-  // The silhouette is an outline, not a solid blob: internal space defines the face.
-  const earLeft=(n===1&&pose%4===2)?-2:0;
-  p(4+earLeft,1,6,10);p(6+earLeft,0,4,2);p(6+earLeft,2,2,7,inner);
-  p(15,1+(n===2&&hopped?2:0),6,10);p(16,0+(n===2&&hopped?2:0),4,2);p(17,2+(n===2&&hopped?2:0),2,7,inner);
-  // Head and cheek outline.
-  p(5,9,15,1);p(3,10,19,2);p(2,12,21,7);p(4,19,17,2);p(6,21,13,1);
-  p(4,12,17,6,light);p(5,10,15,2,light);p(6,18,13,2,light);
-  p(3,15,2,2,inner);p(20,15,2,2,inner);
-  // Wide spaced button eyes, or deliberately silly MUTATE face.
-  const blink=(Math.floor(now/230+13*n)%31===0);
-  if(glitch && n===(beat%3)){
-   p(7,13,3,1);p(8,12,1,3);p(16,13,3,1);p(17,12,1,3);
-   p(12,17,2,2);
-  }else if(!blink){p(7,13,2,3);p(16,13,2,3);p(8,13,1,1,light);p(17,13,1,1,light);}
-  else {p(7,15,2,1);p(16,15,2,1);}
-  p(12,15,2,1);p(11,17,1,1);p(14,17,1,1);
-  p(6,17,2,1,inner);p(18,17,2,1,inner);
-  // Tiny rounded torso: much smaller than the head for chibi proportions.
-  p(7+lean,22,12,5);p(8+lean,27,10,1);p(9+lean,22,8,5,light);
-  p(6+lean,23,3,3);p(18+lean,23,3,3);
-  if(hopped){p(4+lean,20,4,3);p(19+lean,22,4,3);p(8+lean,28,4,2);p(16+lean,27,4,2);}
-  else {p(4+lean,23,4,3);p(19+lean,20,4,3);p(7+lean,28,5,2);p(15+lean,28,5,2);}
-  if(n===0){ // Pink-bow silhouette, expressed in LCD green.
-   p(18,9,3,3);p(22,8,3,3);p(21,10,2,2,inner);
-  } else if(n===1){ // Forelock makes the middle bunny distinct.
-   p(11,9,4,2);p(13,10,2,2);
-  } else { // An off-center cheek mole.
-   p(20,18,1,1);
-  }
- };
- const start=[28,129,230];
+ // Whole-body 8-bit rabbits: broad cheeks, tiny torsos, dancing feet and paws.
+ const scale=2.45;
+ function bunny(n,pose,accident=false){
+  const sx=17+n*44,sy=5,step=pose%4,hop=step===1||step===3;
+  // Everything is placed in sprite pixels, including the legs; no bottom clipping.
+  ctx.save();ctx.translate(Math.round(sx*scale),Math.round((sy+(hop?-2:0))*scale));
+  if(accident){ctx.translate(13*scale,27*scale);ctx.rotate(Math.PI/2);ctx.translate(-13*scale,-27*scale);}
+  const p=(x,y,w,h,col=dark)=>rectLocal(x,y,w,h,col);
+  const rectLocal=(x,y,w,h,col)=>{ctx.fillStyle=col;ctx.fillRect(Math.round(x*scale),Math.round(y*scale),Math.round(w*scale),Math.round(h*scale));};
+  const sway=step===3?1:step===1?-1:0;
+  // Ears with individual tilts; one rabbit can suddenly lose its straight ear.
+  p(5,0,5,11);p(17,0,5,11);
+  p(6,2,2,7,inner);p(18,2,2,7,inner);
+  if(step===2){p(4,2,3,2);p(20,2,3,2);}
+  // Square-round head silhouette and light LCD face.
+  p(4,8,19,2);p(2,10,23,3);p(1,13,25,10);p(3,23,21,3);p(6,26,15,2);
+  p(4,12,19,11,light);p(6,10,15,3,light);p(6,23,15,3,light);
+  p(2,18,2,3,inner);p(23,18,2,3,inner);
+  // Bouncy cheek shape; black eyes can blink and occasionally turn into Xs.
+  const blink=Math.floor(now/240+7*n)%29===0;
+  const freak=glitch&&(n+beat)%3===0;
+  if(freak){p(7,16,4,1);p(8,15,2,3);p(17,16,4,1);p(18,15,2,3);p(12,19,3,3);}
+  else if(blink){p(7,19,3,1);p(17,19,3,1);}
+  else {p(8,16,2,3);p(17,16,2,3);p(8,16,1,1,light);p(17,16,1,1,light);}
+  p(12,19,3,2);p(11,22,2,1);p(15,22,2,1);
+  p(5,21,3,1,inner);p(19,21,3,1,inner);
+  // Little body, separate arms, rounded belly, visible knees and feet.
+  p(8+sway,27,11,8);p(10+sway,29,7,5,light);
+  if(step===1){p(4+sway,27,5,2);p(18+sway,25,6,2);}
+  else if(step===3){p(4+sway,25,6,2);p(18+sway,27,5,2);}
+  else {p(5+sway,29,4,4);p(18+sway,29,4,4);}
+  p(7+sway,35,5,3);p(16+sway,35,5,3);
+  if(step===2){p(6+sway,35,5,3);p(17+sway,33,5,3);}
+  p(21+sway,31,3,3); // Tail.
+  if(n===0){p(19,10,4,3);p(22,9,4,3);p(22,11,1,2,inner);}
+  else if(n===1){p(12,9,3,2);p(14,10,2,2);}
+  else{p(21,22,1,1);}
+  ctx.restore();
+ }
+ const cycleStep=isPlaying?((Math.floor((stateAt()-cycleAnchor)/stepSeconds())%N+N)%N):0;
+ const cycles=isPlaying?Math.floor(Math.max(0,stateAt()-cycleAnchor)/cycleSeconds()):0;
+ // Rare, deterministic missteps: the third bunny trips for one 16th-note at the end of every fourth cycle.
+ const trip=isPlaying&&cycles%4===3&&cycleStep>=27&&cycleStep<=31;
  for(let n=0;n<3;n++){
-  const phase=keeping?0:glitch?(beat+n*2)%4:brandNew?(beat+3-n)%4:(beat+n)%4;
-  let dy=(phase===1||phase===3)?-3:0,dx=phase===1?-2:phase===3?2:0;
-  if(!isPlaying&&!hit&&!glitch&&!brandNew){dy=n===1&&beat%3===0?-1:0;dx=0;}
-  if(keeping){dy=0;dx=0;}
-  bunny(start[n]+dx,7+dy,n,phase);
+  const pose=building?(beat+n)%4:glitch?(beat+n*2)%4:brandNew?(beat+3-n)%4:(beat+n)%4;
+  bunny(n,pose,(trip&&n===1)||(glitch&&n===(beat%3)&&cycleStep%8===0));
  }
  // Small stepped indicators mark the current quarter-note and kit only.
  for(let i=0;i<8;i++){
@@ -618,7 +635,7 @@ function attemptP5(){
  script.onerror=()=>console.info('p5 CDN unavailable; internal Canvas fallback active');
  document.head.appendChild(script);
 }
-function init(){renderPads();bindControls();updateText();startCanvasFallback();attemptP5();if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('./sw.js?v=0.1.8.1', {updateViaCache:'none'}).catch(err=>console.warn('SW:',err));}
+function init(){renderPads();bindControls();updateText();startCanvasFallback();attemptP5();if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('./sw.js?v=0.1.9', {updateViaCache:'none'}).catch(err=>console.warn('SW:',err));}
 init();
-window.WrongNumberDebug={balancePattern,generateOpen,generateFull,getScene:()=>deepCopy(scene),isPlaying:()=>isPlaying,isRecording:()=>!!tape,isDubArmed:()=>dubArmed,pendingDub:()=>deepCopy(pendingDub),setDub,commitDub,snapToStep,cycleAnchor:()=>cycleAnchor,playPad,captureRecent,mutate,fresh,undo,startLoop,stopLoop,startTape,stopTape,exportWav,renderPads,setKit,kitLabel,audioState:()=>({context:live?.state||'none',kit:scene.kit,master:engine?.dry?.gain?.value??null})};
+window.WrongNumberDebug={blank,flashNew,balancePattern,generateOpen,generateFull,getScene:()=>deepCopy(scene),isPlaying:()=>isPlaying,isRecording:()=>!!tape,isDubArmed:()=>dubArmed,pendingDub:()=>deepCopy(pendingDub),setDub,commitDub,snapToStep,cycleAnchor:()=>cycleAnchor,visualState:()=>({blankUntil,newUntil,glitchUntil}),playPad,captureRecent,mutate,fresh,undo,startLoop,stopLoop,startTape,stopTape,exportWav,renderPads,setKit,kitLabel,audioState:()=>({context:live?.state||'none',kit:scene.kit,master:engine?.dry?.gain?.value??null})};
 })();

@@ -1,6 +1,6 @@
 /* Code cache is network-first; offline-first fallback supports saved home-screen apps. */
-const CACHE='wrong-number-v0.1.8.1';
-const CORE=['./','./index.html','./style.css?v=0.1.8.1','./audio.js?v=0.1.8.1','./icons.js?v=0.1.8.1','./app.js?v=0.1.8.1','./manifest.webmanifest','./assets/icon-192.png','./assets/icon-512.png','./assets/icon-180.png'];
+const CACHE='wrong-number-v0.1.9';
+const CORE=['./','./index.html','./style.css?v=0.1.9','./audio.js?v=0.1.9','./icons.js?v=0.1.9','./app.js?v=0.1.9','./manifest.webmanifest','./assets/icon-192.png','./assets/icon-512.png','./assets/icon-180.png'];
 self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(CORE)).then(()=>self.skipWaiting())));
 self.addEventListener('activate',event=>event.waitUntil(caches.keys().then(names=>Promise.all(names.filter(n=>n.startsWith('wrong-number-')&&n!==CACHE).map(n=>caches.delete(n)))).then(()=>self.clients.claim())));
 self.addEventListener('fetch',event=>{

@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="ja">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
@@ -11,14 +11,14 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="apple-touch-icon" href="assets/icon-180.png">
   <link rel="icon" href="assets/icon-192.png">
-  <link rel="stylesheet" href="style.css?v=0.1.8.1">
-  <title>WRONG NUMBER — PLAYABLE SPACE (v0.1.8.1)</title>
+  <link rel="stylesheet" href="style.css?v=0.1.9">
+  <title>WRONG NUMBER — BLANK BEAT (v0.1.9)</title>
 </head>
 <body>
   <main class="shell" aria-label="WRONG NUMBER pocket instrument">
     <header class="header">
       <div class="brand"><span class="brand-spark" aria-hidden="true">✳</span> WRONG NUMBER <span class="brand-sticker" aria-hidden="true">♡!</span></div>
-      <div class="brand-meta"><span>little accidents / no. 018</span><span class="power-led" aria-hidden="true"></span></div>
+      <div class="brand-meta"><span>little accidents / no. 019</span><span class="power-led" aria-hidden="true"></span></div>
     </header>
 
     <section class="lcd-case" aria-label="Instrument status display">
@@ -43,11 +43,11 @@
     <section class="command-row" aria-label="Loop controls">
       <button id="btn-loop" class="command command-loop" aria-pressed="false"><strong>LOOP</strong><small>CAPTURE / STOP</small></button>
       <button id="btn-mutate" class="command command-mutate"><strong>MUTATE</strong><small>EVOLVE</small></button>
-      <button id="btn-keep" class="command command-keep"><strong>KEEP</strong><small>SNAPSHOT</small></button>
+      <button id="btn-blank" class="command command-blank"><strong>BLANK</strong><small>BUILD A BEAT</small></button>
       <button type="button" id="btn-dub" class="command command-dub" aria-pressed="false" aria-label="Start overdub recording" title="Tap to record your live pad performance into the loop"><strong>● DUB</strong><small>OVERDUB</small></button>
     </section>
     <section class="bottom-strip" aria-label="Recording and pattern tools">
-      <button id="btn-restore" class="utility utility-restore" title="Hold to undo the last mutation">↶ RESTORE</button>
+      <button id="btn-undo" class="utility utility-undo" title="Undo the last change">↶ UNDO</button>
       <button id="btn-tape" class="utility utility-tape" aria-pressed="false" title="Record up to 30 seconds of live performance">● TAPE</button>
       <button id="btn-new" class="utility utility-new" title="Tap for an open groove, hold for a full groove">✳ NEW</button>
       <button id="btn-export" class="utility utility-export" title="Export two-bar loop">↓ WAV</button>
@@ -59,22 +59,23 @@
       <a id="download-link" href="#" download="wrong-number-loop.wav" hidden>DOWNLOAD WAV</a>
       <button id="btn-share" hidden>SHARE / SAVE TO FILES</button>
     </div>
-    <footer class="footer-line"><span id="live-message">CANDY KIT / READY</span><span>v0.1.8.1 ✳</span></footer>
+    <footer class="footer-line"><span id="live-message">CANDY KIT / READY</span><span>v0.1.9 ✳</span></footer>
   </main>
   <details class="help" lang="ja">
     <summary>使い方</summary>
     <div class="help-content">
-      <p><b>はじめに：</b>NEWでビートを作り、LOOPで再生。あとは自由にパッドを叩いてください。</p>
-      <p><b>PAD：</b>タップで発音。長押しでリズムに合わせて連打します。</p>
-      <p><b>DUB：</b>押してから演奏するとループに記録。もう一度押すと終了します。</p>
+      <p><b>はじめに：</b>BLANKでゼロから作るか、NEWでビートを生成。</p>
+      <p><b>PAD：</b>タップで発音。長押しで連打。</p>
+      <p><b>BLANK：</b>空の2小節を再生し、DUBを自動開始。パッドを叩いて入力します。</p>
+      <p><b>DUB：</b>もう一度押すと記録終了。いつでも録音を再開できます。</p>
       <p><b>MUTATE：</b>ビートを変化させます。長押しすると変化が大きくなります。</p>
-      <p><b>KEEP / RESTORE：</b>気に入った状態を保存・復元。RESTORE長押しで直前の変更を取り消せます。</p>
-      <p><b>NEW長押し：</b>音数の多いビートを生成。KITとBPMは上部で変更できます。</p>
-      <p><b>TAPE / WAV：</b>演奏を録音する／ループを書き出す。</p>
+      <p><b>UNDO：</b>直前のNEW、BLANK、MUTATE、DUBを取り消します。</p>
+      <p><b>NEW長押し：</b>音数の多いビートを生成。</p>
+      <p><b>TAPE / WAV：</b>演奏を録音／ループを書き出し。</p>
     </div>
   </details>
-  <script src="audio.js?v=0.1.8.1" defer></script>
-  <script src="icons.js?v=0.1.8.1" defer></script>
-  <script src="app.js?v=0.1.8.1" defer></script>
+  <script src="audio.js?v=0.1.9" defer></script>
+  <script src="icons.js?v=0.1.9" defer></script>
+  <script src="app.js?v=0.1.9" defer></script>
 </body>
 </html>
