@@ -1,4 +1,4 @@
-/* WRONG NUMBER v0.2.0 — PLAY WITH IT */
+/* WRONG NUMBER v0.2.1 — LITTLE WINDOW */
 (()=>{'use strict';
 const A=window.WrongAudio,I=window.WrongIcons; if(!A||!I){document.body.textContent='AUDIO ENGINE FAILED';return;}
 const $=id=>document.getElementById(id), N=32, STORE='wrong-number-session-0.1';
@@ -9,7 +9,7 @@ const getSaved=k=>{try{return JSON.parse(localStorage.getItem(k));}catch{return 
 const newScene=()=>({bpm:92,seed:randomSeed(),groove:'open',color:{broken:.24,space:.27,shift:0},kit:0,events:[]});
 function validateScene(raw){
  if(!raw||typeof raw!=='object'||!Array.isArray(raw.events))return null;
- return {bpm:A.clamp(Number(raw.bpm)||92,48,180),seed:(raw.seed>>>0)||3,groove:['open','full','classic','empty'].includes(raw.groove)?raw.groove:'classic',kit:A.clamp(Math.floor(Number(raw.kit)||0),0,4),color:{broken:A.clamp(Number(raw.color?.broken)||.18,0,1),space:A.clamp(Number(raw.color?.space)||.25,0,1),shift:A.clamp(Number(raw.color?.shift)||0,-2,2)},events:raw.events.slice(0,64).filter(e=>Number.isInteger(e.step)&&e.step>=0&&e.step<N&&Number.isInteger(e.pad)&&e.pad>=0&&e.pad<16).map(e=>({step:e.step,pad:e.pad,velocity:A.clamp(Number(e.velocity)||.85,.2,1),variant:(e.variant>>>0)||1,origin:e.origin==='dub'?'dub':e.origin==='auto'?'auto':'legacy',expression:A.clamp(Number(e.expression)||0,-1,1)}))};
+ return {bpm:A.clamp(Number(raw.bpm)||92,48,180),seed:(raw.seed>>>0)||3,groove:['open','full','classic','empty'].includes(raw.groove)?raw.groove:'classic',kit:A.clamp(Math.floor(Number(raw.kit)||0),0,A.KIT_TITLES.length-1),color:{broken:A.clamp(Number(raw.color?.broken)||.18,0,1),space:A.clamp(Number(raw.color?.space)||.25,0,1),shift:A.clamp(Number(raw.color?.shift)||0,-2,2)},events:raw.events.slice(0,64).filter(e=>Number.isInteger(e.step)&&e.step>=0&&e.step<N&&Number.isInteger(e.pad)&&e.pad>=0&&e.pad<16).map(e=>({step:e.step,pad:e.pad,velocity:A.clamp(Number(e.velocity)||.85,.2,1),variant:(e.variant>>>0)||1,origin:e.origin==='dub'?'dub':e.origin==='auto'?'auto':'legacy',expression:A.clamp(Number(e.expression)||0,-1,1)}))};
 }
 let scene=validateScene(getSaved(STORE))||newScene();
 let live=null,engine=null,isPlaying=false,scheduler=null,nextStep=0,nextTick=0,loopStarted=0,cycleAnchor=0,perfCounter=0,lastPadAt=new Map(),recent=[],downPointers=new Map(),pulseUntil=new Array(16).fill(0),lastPad=-1,displayMessage='READY / TOUCH A PAD',messageUntil=0,renderBusy=false,wavUrl=null,wavFile=null,tape=null,tapeClock=null,undoStack=[];
@@ -18,6 +18,7 @@ let live=null,engine=null,isPlaying=false,scheduler=null,nextStep=0,nextTick=0,l
 let dubArmed=false,pendingDub=[],dubUndoSaved=false,dubSessionCount=0,backingGraph=null;
 let countInEndAt=0,buildTake=0,streaks=new Map(),accidentUntil=0,accentBunny=1;
 let replyTimer=null,replyCooldown=0,replyCount=0,phraseHits=[];
+let lcdScreen='rabbits';
 
 // The previous session and 16-pad layout remain compatible with v0.1.4.
 let stateAt=()=>live?.currentTime??0;
@@ -25,6 +26,7 @@ let glitchUntil=0,blankUntil=0,newUntil=0,visualBeat=0,newFlashTimer=null;
 const countInActive=()=>isPlaying&&countInEndAt>0&&stateAt()<countInEndAt;
 const readyBeats=()=>Math.max(1,Math.min(4,Math.ceil((countInEndAt-stateAt())/(60/scene.bpm))));
 const kitLabel=()=>A.KIT_TITLES[scene.kit]||A.KIT_TITLES[0];
+const padLabel=pad=>(A.KIT_PAD_NAMES?.[scene.kit]||A.KIT_NAMES)[pad];
 function updateKitUi(){
  const name=kitLabel();
  $('btn-source').textContent=name;
@@ -33,7 +35,7 @@ function updateKitUi(){
 }
 function setKit(index){
  scene.kit=(index+A.KIT_TITLES.length)%A.KIT_TITLES.length;
- updateKitUi();persist();message(`${kitLabel()} / LOADED`,2);
+ updateKitUi();updatePadNames();persist();message(`${kitLabel()} / LOADED`,2);
 }
 const stepSeconds=()=>60/scene.bpm/4,cycleSeconds=()=>N*stepSeconds();
 function displayMode(){
@@ -46,7 +48,7 @@ function displayMode(){
 }
 function updateText(){
  $('tempo-value').innerHTML=String(scene.bpm).padStart(3,'0')+' <small>BPM</small>';
- $('lcd-mode').textContent=displayMode();
+ $('lcd-mode').textContent=lcdScreen==='steps'?'BEAT / VIEW':displayMode();
  $('beat-readout').textContent=countInActive()?`${scene.bpm} BPM · IN ${readyBeats()}`:`${scene.bpm} BPM · ${isPlaying?`${1+Math.floor(visualBeat/16)}:${String(1+Math.floor(visualBeat%16/4)).padStart(2,'0')}`:'--:--'}`;
  $('btn-loop').setAttribute('aria-pressed',String(isPlaying));
  $('btn-dub').setAttribute('aria-pressed',String(dubArmed));
@@ -195,7 +197,7 @@ function playPad(pad,options={}){
  // DUB records repeats too; JAM always leaves the underlying pattern untouched.
  if(dubArmed)queueDub(pad,options.hold?.53:.88,now,expression);
  else if(!options.hold)maybeReply(pad,now);
- message(dubArmed?`● DUB / ${A.KIT_NAMES[pad]}`:options.hold?`HOLD / ${A.KIT_NAMES[pad]}`:`${String(pad+1).padStart(2,'0')} / ${A.KIT_NAMES[pad]}`,1.1);
+ message(dubArmed?`● DUB / ${padLabel(pad)}`:options.hold?`HOLD / ${padLabel(pad)}`:`${String(pad+1).padStart(2,'0')} / ${padLabel(pad)}`,1.1);
 }
 // A rhythmic repeat that follows tempo and timbre instead of a fixed 125ms timer.
 // The first attack stays untouched; repeats start only after a deliberate hold.
@@ -220,6 +222,13 @@ function endHold(token){
  clearTimeout(item.timeout);downPointers.delete(token);
 }
 
+function updatePadNames(){
+ const names=A.KIT_PAD_NAMES?.[scene.kit]||A.KIT_NAMES;
+ Array.from($('pads').children).forEach((button,i)=>{
+  if(button.querySelector('.pad-name'))button.querySelector('.pad-name').textContent=names[i];
+  button.setAttribute('aria-label',`Pad ${i+1}: ${names[i]}`);
+ });
+}
 function renderPads(){
  const container=$('pads');container.innerHTML='';
  A.KIT_NAMES.forEach((name,index)=>{
@@ -235,6 +244,7 @@ function renderPads(){
   b.addEventListener('pointerup',release);b.addEventListener('pointercancel',release);b.addEventListener('lostpointercapture',release);
   container.appendChild(b);
  });
+ updatePadNames();
 }
 function generateFull(seed=randomSeed()){
  const r=A.rng(seed ^ (scene.kit * 657913)),events=[],add=(step,pad,velocity=.85)=>events.push({step,pad,velocity,variant:(r()*0xffffffff)>>>0});
@@ -253,6 +263,10 @@ function generateFull(seed=randomSeed()){
   }else if(kit===3){
    [3,6,10,13].forEach(s=>{if(r()<.84)add(o+s,4+Math.floor(r()*4),.53+r()*.26);});
    for(let j=0;j<6;j++)if(r()<.64)add(o+Math.floor(r()*16),8+Math.floor(r()*8),.40+r()*.31);
+  }else if(kit===5){
+   [3,7,11].forEach(s=>{if(r()<.72)add(o+s,4+Math.floor(r()*4),.55+r()*.16);});
+   [2,6,13].forEach(s=>{if(r()<.83)add(o+s,8+Math.floor(r()*4),.45+r()*.18);});
+   if(r()<.62)add(o+15,12+Math.floor(r()*4),.42);
   }else if(kit===4){
    [2,5,9,14].forEach(s=>{if(r()<.87)add(o+s+(r()<.18?1:0),4+Math.floor(r()*4),.44+r()*.37);});
    for(let j=0;j<9;j++)if(r()<.74)add(o+Math.floor(r()*16),8+Math.floor(r()*8),.35+r()*.35);
@@ -273,9 +287,9 @@ function generateOpen(seed=randomSeed()){
  for(let bar=0;bar<2;bar++){
   const o=bar*16;
   // One reliable anchor, an occasional offbeat kick and an asymmetric backbeat.
-  add(o,bar===0?0:(kit===3?1:kit===4?2:0),.78+r()*.13);
+  add(o,bar===0?0:(kit===3?1:kit===4?2:kit===5?3:0),.78+r()*.13);
   if(r()<(kit===2?.47:.68))add(o+8,kit===4?3:r()<.72?0:2,.66+r()*.18);
-  const backbeat=kit===3?(r()<.5?5:7):kit===4?6:7;
+  const backbeat=kit===3?(r()<.5?5:7):kit===4?6:kit===5?4+Math.floor(r()*4):7;
   add(o+(kit===4?6:4),backbeat,.52+r()*.25);
   // Deliberate rest after the backbeat: the player can answer.
   if(r()<.52)add(o+(kit===1?11:12),4+Math.floor(r()*4),.43+r()*.24);
@@ -288,6 +302,7 @@ function generateOpen(seed=randomSeed()){
  else if(kit===2){add(15,13,.40);}
  else if(kit===3){add(10,9,.55);add(23,6,.50);}
  else if(kit===4){add(7,10,.55);add(29,11,.53);}
+ else if(kit===5){add(6,8,.55);add(26,10,.50);}
  let playable=balancePattern(events,16);
  // A quiet base should still have enough rhythmic information to respond to.
  // Fill a few genuinely unused slots; never compensate with overlapping attacks.
@@ -443,6 +458,9 @@ function blank(keepTempo=false){
 
 function tempo(delta){const wasCounting=countInActive();if(dubArmed&&pendingDub.length)commitDub();scene.bpm=A.clamp(scene.bpm+delta,48,180);if(wasCounting)startLoop({countIn:true});else resetPlayhead();persist();message(`${scene.bpm} BPM`,.8);}
 function bindControls(){
+ const display=$('display-view');
+ display.addEventListener('click',toggleLcd);
+ display.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleLcd();}});
  $('btn-source').addEventListener('click',()=>setKit(scene.kit+1));
  $('kit-prev').addEventListener('click',()=>setKit(scene.kit-1));
  $('kit-next').addEventListener('click',()=>setKit(scene.kit+1));
@@ -615,6 +633,38 @@ async function stopTape(){
  }catch(err){console.error(err);$('export-status').textContent='TAPE EXPORT FAILED / '+String(err?.message||err).slice(0,90);message('TAPE EXPORT FAILED',4);}
  finally{finishRender();}
 }
+
+function paintSequence(ctx,w,h,colors){
+ const {dark,light,inner,medium}=colors;
+ const bar=isPlaying&&!countInActive()?Math.floor(visualBeat/16):0;
+ const start=bar*16,cell=(w-43)/16,row=Math.min(17,(h-8)/4);
+ ctx.save();ctx.textBaseline='middle';ctx.textAlign='left';
+ ctx.font='bold 10px monospace';
+ for(let pad=0;pad<4;pad++){
+  const y=5+pad*row;
+  ctx.fillStyle=dark;ctx.fillText(String(pad+1).padStart(2,'0'),2,y+row*.45);
+  for(let step=0;step<16;step++){
+   const hits=scene.events.filter(e=>e.pad===pad&&e.step===start+step);
+   const x=31+step*cell;
+   ctx.fillStyle=step%4===0?medium:inner;
+   ctx.fillRect(Math.round(x),Math.round(y+1),Math.max(2,Math.floor(cell-2)),Math.max(5,Math.round(row-5)));
+   if(hits.length){
+    ctx.fillStyle=dark;
+    ctx.fillRect(Math.round(x),Math.round(y+1),Math.max(2,Math.floor(cell-2)),Math.max(5,Math.round(row-5)));
+   }
+   if(isPlaying&&!countInActive()&&Math.floor(visualBeat/16)===bar&&visualBeat%16===step){
+    ctx.fillStyle=dark;ctx.fillRect(Math.round(x),Math.round(y+row-2),Math.max(2,Math.floor(cell-2)),2);
+   }
+  }
+ }
+ ctx.restore();
+}
+function toggleLcd(){
+ lcdScreen=lcdScreen==='rabbits'?'steps':'rabbits';
+ $('display-view').setAttribute('aria-label',lcdScreen==='steps'?'Beat display. Tap to see rabbits.':'Dancing rabbits. Tap to see pads 1 to 4.');
+ updateText();
+}
+
 // Three Game & Watch rabbits. All graphics are hand-coded pixels, no fonts or emojis.
 // Each state uses 2–4 stepped poses rather than smooth waveforms or animation assets.
 function paint(ctx,w,h){
@@ -623,16 +673,18 @@ function paint(ctx,w,h){
  const beat=isPlaying?Math.floor(Math.max(0,(stateAt()-(countInActive()?countInEndAt:cycleAnchor))/stepSeconds())/2):Math.floor(now/640);
  const glitch=now<glitchUntil,building=now<blankUntil,brandNew=now<newUntil;
  const hit=pulseUntil.some(x=>x>now),mode=displayMode();
- if($('lcd-mode').textContent!==mode)$('lcd-mode').textContent=mode;
+ const actualMode=lcdScreen==='steps'?'BEAT / VIEW':mode;
+ if($('lcd-mode').textContent!==actualMode)$('lcd-mode').textContent=actualMode;
  if(countInActive())$('beat-readout').textContent=`${scene.bpm} BPM · IN ${readyBeats()}`;
  else if(isPlaying)$('beat-readout').textContent=`${scene.bpm} BPM · ${1+Math.floor(visualBeat/16)}:${String(1+Math.floor(visualBeat%16/4)).padStart(2,'0')}`;
- if(now>messageUntil){const neutral=tape?'TAPE / RECORDING':countInActive()?`GET READY / ${readyBeats()} BEATS`:dubArmed&&scene.groove==='empty'?`TAKE ${Math.max(1,buildTake)} / KEEP PLAYING`:dubArmed?`● OVERDUB / ${pendingDub.length} QUEUED`:isPlaying?'JAM / PLAY ALONG':'TAP TO PLAY';if($('status-text').textContent!==neutral)$('status-text').textContent=neutral;}
+ if(now>messageUntil){const neutral=lcdScreen==='steps'?`01-04 / BAR ${isPlaying?1+Math.floor(visualBeat/16):1} OF 2`:tape?'TAPE / RECORDING':countInActive()?`GET READY / ${readyBeats()} BEATS`:dubArmed&&scene.groove==='empty'?`TAKE ${Math.max(1,buildTake)} / KEEP PLAYING`:dubArmed?`● OVERDUB / ${pendingDub.length} QUEUED`:isPlaying?'JAM / PLAY ALONG':'TAP TO PLAY';if($('status-text').textContent!==neutral)$('status-text').textContent=neutral;}
  const dark='#2a4930',light='#b9eb90',inner='#8bbc66',medium='#668a4b';
  ctx.imageSmoothingEnabled=false;ctx.clearRect(0,0,w,h);ctx.fillStyle=light;ctx.fillRect(0,0,w,h);
  // Dot paper texture remains stationary; no waveform or oscillogram.
  ctx.globalAlpha=.11;ctx.fillStyle=medium;
  for(let x=7;x<w;x+=9)for(let y=5;y<h;y+=9)ctx.fillRect(x,y,1,1);
  ctx.globalAlpha=1;
+ if(lcdScreen==='steps'){paintSequence(ctx,w,h,{dark,light,inner,medium});return;}
  // Three full-body LCD sprites on a tiny moving stage. No image assets.
  const scale=Math.max(.75,Math.min((h-9)/50,(w-32)/(3*27+2*24)));
  const floorY=Math.round(h-4);
@@ -765,7 +817,7 @@ function attemptP5(){
  script.onerror=()=>console.info('p5 CDN unavailable; internal Canvas fallback active');
  document.head.appendChild(script);
 }
-function init(){renderPads();bindControls();updateText();startCanvasFallback();attemptP5();if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('./sw.js?v=0.2.0', {updateViaCache:'none'}).catch(err=>console.warn('SW:',err));}
+function init(){renderPads();bindControls();updateText();startCanvasFallback();attemptP5();if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('./sw.js?v=0.2.1', {updateViaCache:'none'}).catch(err=>console.warn('SW:',err));}
 init();
 window.WrongNumberDebug={blank,countInActive,readyBeats,getCountInEnd:()=>countInEndAt,getTake:()=>buildTake,getReplies:()=>replyCount,flashNew,balancePattern,generateOpen,generateFull,getScene:()=>deepCopy(scene),isPlaying:()=>isPlaying,isRecording:()=>!!tape,isDubArmed:()=>dubArmed,pendingDub:()=>deepCopy(pendingDub),setDub,commitDub,snapToStep,cycleAnchor:()=>cycleAnchor,visualState:()=>({blankUntil,newUntil,glitchUntil}),playPad,captureRecent,mutate,fresh,undo,startLoop,stopLoop,startTape,stopTape,exportWav,renderPads,setKit,kitLabel,audioState:()=>({context:live?.state||'none',kit:scene.kit,master:engine?.dry?.gain?.value??null})};
 })();

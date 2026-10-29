@@ -114,22 +114,73 @@ function audioBufferToWav(buffer,startFrame,endFrame){
 }
 /* Three additional synthesized instruments. All voices use the same graph and
    offline render paths; nothing is streamed, sampled or downloaded. */
-const KIT_TITLES=['CANDY KIT','TOY MALFUNCTION','SUGAR POISON','ROTTEN CARROT','WORM PARADE'];
-const KIT_SHORT=['CANDY','TOY','SUGAR','CARROT','WORMS'];
+const KIT_TITLES=['CANDY KIT','TOY MALFUNCTION','SUGAR POISON','ROTTEN CARROT','WORM PARADE','BAD SPELLING'];
+const KIT_SHORT=['CANDY','TOY','SUGAR','CARROT','WORMS','SPELL'];
+const KIT_PAD_NAMES=[null,null,null,null,null,['UNH','NOPE','WHY','BURP','K-CH','SSS','TIK','PUH','BA','EH','OH','EEE','REWIND','HUH','DRONE','BYE']];
 function scheduleKitVoice(g,pad,time,params={}){
- const kit=clamp(Math.floor(Number(params.kit)||0),0,4);
+ const kit=clamp(Math.floor(Number(params.kit)||0),0,KIT_TITLES.length-1);
  if(kit===0)return scheduleVoice(g,pad,time,params); // Preserve v0.1.4's proven synth voice.
  const id=pad|0,t=Math.max(.001,time),r=rng(((params.seed||1)^Math.imul((id+23),(kit+1)*0x9e3779b1))>>>0);
  const rand=()=>r(),color=params.color||{},hold=!!params.hold,fire=!!params.fire;
  const broken=clamp(color.broken??.24,0,1),space=clamp(color.space??.26,0,1);
  const trans=clamp((color.shift||0)*1.7+(fire?rand()-.5:0)*4,-7,7);
  const p=Math.pow(2,trans/12),vol=clamp(params.velocity??.85,.18,1.1)*(hold?.70:1);
- const v=bus(g,t,vol*(kit===3?.77:kit===4?.68:.73),kit===2?.24+space*.25:kit===3?.09+space*.17:kit===4?.15+space*.18:.07+space*.13,kit===1?.035:kit===2?.14:kit===3?.075:.06);
+ const v=bus(g,t,vol*(kit===3?.77:kit===4?.68:kit===5?.79:.73),kit===2?.24+space*.25:kit===3?.09+space*.17:kit===4?.15+space*.18:kit===5?.12+space*.20:.07+space*.13,kit===1?.035:kit===2?.14:kit===3?.075:kit===5?.092:.06);
  const osc=(f,d,a,kind='sine',to=f,offset=0)=>oscillator(g,v,t+offset,{f:f*p,endF:to*p,d,a,type:kind,attack:kind==='sawtooth'?.002:.004});
  const hit=(d,a,hp=2400,offset=0)=>noise(g,v,t,{d,a,hp,offset:rand()*.87+offset});
  const band=(d,a,f,q=.8)=>noise(g,v,t,{d,a,bp:f,q,offset:rand()*.81});
  const mod=(f,m,index,d,a,drop=1,offset=0)=>fm(g,v,t+offset,{f:f*p,m,index,d,a,drop});
  const f=(factor=1)=>factor*(1+(rand()-.5)*(.02+broken*.035));
+
+ // Parallel formant resonators create unintelligible pseudo-speech with no speech APIs or samples.
+ const syllable=(pitch,duration,amount,vowel=0,offset=0,attack=.012)=>{
+  const c=g.ctx,start=t+offset,base=Math.max(60,pitch*p);
+  const vowels=[[690,1250,2650],[470,2050,2800],[480,930,2400],[350,2300,3060],[760,1700,2650]];
+  const target=vowels[((vowel%vowels.length)+vowels.length)%vowels.length];
+  const saw=c.createOscillator(),buzz=c.createOscillator(),excite=c.createGain(),gate=c.createGain();
+  saw.type='sawtooth';buzz.type='triangle';
+  saw.frequency.setValueAtTime(base,start);
+  saw.frequency.exponentialRampToValueAtTime(Math.max(46,base*(.82+rand()*.3)),start+duration*.68);
+  buzz.frequency.value=base*1.995;
+  excite.gain.value=.55;
+  saw.connect(excite);buzz.connect(excite);
+  const amps=[.40,.34,.25];
+  for(let i=0;i<3;i++){
+   const filter=c.createBiquadFilter(),gain=c.createGain();
+   filter.type='bandpass';filter.frequency.setValueAtTime(target[i]*(.92+rand()*.16),start);
+   filter.frequency.linearRampToValueAtTime(target[i]*(.8+rand()*.4),start+duration*.76);
+   filter.Q.value=2.8+i*.42;
+   gain.gain.value=amps[i];excite.connect(filter);filter.connect(gain);gain.connect(gate);
+  }
+  adsr(gate.gain,start,amount,duration,attack);
+  gate.connect(v);saw.start(start);buzz.start(start);
+  saw.stop(start+duration+.012);buzz.stop(start+duration+.012);
+ };
+ if(kit===5){ // BAD SPELLING: bent talking toy, consonant clicks and imaginary phonemes.
+  if(id<4){
+   const vowel=[2,0,1,3][id],freq=[72,94,111,137][id];
+   syllable(freq,.35+id*.07,.53,vowel,0,.006);
+   if(id===0||id===1)osc(freq*.53,.30,.25,'sine',42);
+   if(id===2)mod(94,3.4,125,.25,.18,.59);
+   if(id===3)hit(.031,.12,2600);
+  }else if(id<8){
+   if(id===4){hit(.045,.33,1900);syllable(135,.095,.26,0,.008,.002);}
+   if(id===5){band(.21,.27,3850,1.4);syllable(154,.085,.17,3,.037,.007);}
+   if(id===6){hit(.026,.30,5200);osc(720,.024,.12,'square',330);}
+   if(id===7){hit(.055,.25,2300);syllable(128,.12,.22,2,.017,.003);}
+  }else if(id<12){
+   const vowel=[0,1,2,3][id],pitch=[163,171,145,196][id];
+   syllable(pitch,.24+id%3*.04,.51,vowel,0,.006);
+   if(id===8||id===11)hit(.024,.17,3400);
+   if(id===10)syllable(pitch*.72,.12,.18,4,.14,.015);
+  }else{
+   if(id===12){syllable(181,.47,.32,3,0,.22);band(.18,.10,2300,1.1);}
+   if(id===13){syllable(142,.29,.31,1);syllable(124,.27,.23,2,.24,.045);}
+   if(id===14){syllable(101,.74,.40,4,0,.095);mod(96,2.3,40,.66,.13,.8);}
+   if(id===15){[129,157,192].forEach((q,i)=>syllable(q,.39+i*.075,.18,[2,0,3][i],i*.12,.008));}
+  }
+  return v;
+ }
  if(kit===1){ // TOY MALFUNCTION — elastic circuits, intentionally awkward intervals
   if(id<4){
    if(id===0){mod(111,2.5,185,.28,.43,.39);osc(66,.29,.17,'triangle',44);hit(.012,.085,5100);}
@@ -235,5 +286,5 @@ function scheduleKitVoice(g,pad,time,params={}){
 }
 
 const KIT_NAMES=['PRESS','FALL','CORNER','BEND','TICK','WOOD','TIN','SNAP','VOWEL','GLASS','ERROR','CUT','REVERSE','HOLLOW','AIR','GHOST'];
-window.WrongAudio={graph,scheduleVoice,scheduleKitVoice,audioBufferToWav,rng,clamp,KIT_NAMES,KIT_TITLES,KIT_SHORT};
+window.WrongAudio={graph,scheduleVoice,scheduleKitVoice,audioBufferToWav,rng,clamp,KIT_NAMES,KIT_TITLES,KIT_SHORT,KIT_PAD_NAMES};
 })();
