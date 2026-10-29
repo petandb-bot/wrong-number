@@ -1,4 +1,4 @@
-/* WRONG NUMBER audio engine v0.2.2 — procedural instruments and short rhythmic FX. */
+/* WRONG NUMBER audio engine v0.2.4 — procedural instruments and real one-shot FX. */
 (()=>{'use strict';
 const TAU=Math.PI*2, clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
 function rng(seed){let a=seed>>>0;return ()=>{a+=0x6D2B79F5;let t=a;t=Math.imul(t^(t>>>15),t|1);t^=t+Math.imul(t^(t>>>7),t|61);return((t^(t>>>14))>>>0)/4294967296;};}
@@ -113,7 +113,7 @@ function audioBufferToWav(buffer,startFrame,endFrame){
    offline render paths; nothing is streamed, sampled or downloaded. */
 const KIT_TITLES=['CANDY KIT','TOY MALFUNCTION','SUGAR POISON','ROTTEN CARROT','WORM PARADE','BAD SPELLING'];
 const KIT_SHORT=['CANDY','TOY','SUGAR','CARROT','WORMS','SPELL'];
-const KIT_PAD_NAMES=[null,null,null,null,null,['HELLO','NO WAY','WHY','SORRY','PLEASE','SPEAK','UH-OH','GOODBYE','RED','BLUE','ZERO','AGAIN','STUCK','SLOW','ERROR','BYE']];
+const KIT_PAD_NAMES=[null,null,null,null,null,['AH','UU','EH','OH','IH','YAH','WAH','EH?','BA','BU','BE','BO','YEE','WEE','UH-OH','NO']];
 function scheduleKitVoice(g,pad,time,params={}){
  const kit=clamp(Math.floor(Number(params.kit)||0),0,KIT_TITLES.length-1);
  if(kit===0)return scheduleVoice(g,pad,time,params);
@@ -235,139 +235,146 @@ function scheduleKitVoice(g,pad,time,params={}){
 }
 
 
-// A deliberately synthetic, syllable-based toy voice: pitched excitation + gliding
-// formants + consonants. Each pad contains a short multi-phoneme utterance.
+// Short single-vowel toy speech: no long words, long tails, or overlapping syllables.
 const VOWELS={
  A:[820,1380,2800],E:[490,2070,2850],I:[300,2500,3200],
  O:[510,950,2500],U:[350,1080,2350],Y:[580,1750,2850]
 };
-const SPEECH_WORDS=[
- ['E','O','O'],['O','A','Y'],['U','A','I'],['O','E','Y'],
- ['I','E','Y'],['I','Y','A'],['U','O'],['U','A','E'],
- ['E','E','D'],['U','U'],['I','O'],['A','E','I'],
- ['A','U'],['O','O','O'],['E','O','E'],['A','I']
+// vowel, fundamental, glide in semitones, duration, onset consonant, brightness
+const PHONEMES=[
+ ['A',158, 3,.18,'',1], ['U',125,-5,.22,'',.8], ['E',168, 5,.24,'',1], ['O',138,-3,.21,'',.9],
+ ['I',190, 1,.16,'',.9], ['A',220, 5,.18,'y',1], ['A',150,-4,.23,'w',.7], ['E',165, 7,.23,'',1],
+ ['A',145,-2,.20,'b',.9], ['U',136,-4,.20,'b',.8], ['E',187, 3,.19,'b',1], ['O',158,-3,.22,'b',.75],
+ ['I',218, 6,.19,'y',1], ['I',205,-5,.25,'w',.8], ['U',124, 7,.26,'',.6], ['O',145,-6,.23,'n',.75]
 ];
-function speechGate(param,start,peak,duration){
- const end=start+duration;
- param.setValueAtTime(.0001,start);
- param.linearRampToValueAtTime(peak,start+Math.min(.02,duration*.15));
- param.setValueAtTime(peak,start+duration*.77);
- param.linearRampToValueAtTime(.0001,end);
-}
 function scheduleSpeech(g,pad,time,params={}){
- const id=pad|0,c=g.ctx,t=Math.max(.001,time);
- const r=rng(((params.seed||1)^Math.imul(0x45d9f3b,id+37))>>>0),rand=()=>r();
+ const c=g.ctx,id=clamp(pad|0,0,15),t=Math.max(.001,time);
  const color=params.color||{},broken=clamp(color.broken??.24,0,1);
- const shift=clamp(color.shift||0,-2,2),pitch=Math.pow(2,shift/12);
- const vel=clamp(params.velocity??.85,.2,1.15)*(params.hold?.70:1);
- const voice=bus(g,t,vel*.88,.12+clamp(color.space??.25,0,1)*.15,.058);
- const loFi=c.createBiquadFilter();loFi.type='lowpass';loFi.frequency.value=3600+broken*1100;loFi.Q.value=.75;loFi.connect(voice);
- const words=SPEECH_WORDS[id]||SPEECH_WORDS[0];
- const syllableLength=[.205,.185,.165,.205,.19,.20,.235,.19,.18,.19,.21,.205,.24,.245,.175,.20][id];
- const base=[116,133,173,146,155,187,127,151,212,184,207,179,132,112,158,187][id]*pitch;
- const voicings=[1,.85,1.06,.91,1.11,.93,1.02,.87,1.14,1.08,.97,1.05,.92,.78,1.13,.90];
- for(let k=0;k<words.length;k++){
-  const vowel=VOWELS[words[k]]||VOWELS.E;
-  const next=VOWELS[words[Math.min(k+1,words.length-1)]]||vowel;
-  const start=t+k*syllableLength,end=start+syllableLength*.91;
-  const dur=end-start,root=base*voicings[k%voicings.length]*(1+(k-1)*.035);
-  const saw=c.createOscillator(),pulse=c.createOscillator(),excitation=c.createGain(),gate=c.createGain();
-  saw.type='sawtooth';pulse.type='square';
-  saw.frequency.setValueAtTime(root*(1+rand()*.01),start);
-  saw.frequency.setValueAtTime(root*(1+(k%2?.04:-.03)),start+dur*.4);
-  saw.frequency.linearRampToValueAtTime(root*(.88+rand()*.16),end);
-  pulse.frequency.setValueAtTime(root*.996,start);
-  pulse.frequency.linearRampToValueAtTime(root*(.92+rand()*.12),end);
-  excitation.gain.value=.65;saw.connect(excitation);pulse.connect(excitation);
-  const weights=[.8,.67,.52];
-  for(let i=0;i<3;i++){
-   const band=c.createBiquadFilter(),gain=c.createGain();
-   band.type='bandpass';band.Q.value=5.0+i*.9;
-   band.frequency.setValueAtTime(vowel[i]*(.96+rand()*.07),start);
-   band.frequency.linearRampToValueAtTime((vowel[i]*.77+next[i]*.23)*(1+broken*.08),end);
-   gain.gain.value=weights[i];excitation.connect(band);band.connect(gain);gain.connect(gate);
-  }
-  speechGate(gate.gain,start,.8,dur);gate.connect(loFi);
-  saw.start(start);pulse.start(start);saw.stop(end+.015);pulse.stop(end+.015);
-  if(k===0 || (id%3===0&&k===1)){
-   const consonants=['sh','h','t','k','s','f'][id%6];
-   if(consonants==='s'||consonants==='sh'||consonants==='f')
-    noise(g,loFi,start,{d:.052,a:.15,bp:consonants==='sh'?2900:4500,q:.8,offset:rand()});
-   else noise(g,loFi,start,{d:.018,a:.11,hp:1900+id*110,offset:rand()});
-  }
+ const seed=((params.seed||1)^Math.imul(id+37,0x45d9f3b))>>>0,r=rng(seed);
+ const [vowel,base,glide,duration,consonant,brightness]=PHONEMES[id];
+ const vel=clamp(params.velocity??.85,.2,1.1)*(params.hold?.72:1);
+ const pitch=Math.pow(2,clamp(color.shift||0,-2,2)/12);
+ const dur=Math.min(.215,duration)+(params.fire?-.025:0),end=t+dur;
+ // Intentionally short dry source so 16th-note sequences remain articulated.
+ const out=bus(g,t,vel*.72,.035+clamp(color.space??.25,0,1)*.04,.008);
+ const tone=c.createBiquadFilter();tone.type='lowpass';tone.frequency.value=3100+broken*700;tone.Q.value=.48;tone.connect(out);
+ const carrier=c.createOscillator(),thin=c.createOscillator(),blend=c.createGain(),env=c.createGain();
+ carrier.type='sawtooth';thin.type='square';blend.gain.value=.22;
+ const startF=base*pitch*(.995+r()*.01),endF=startF*Math.pow(2,(glide+((r()-.5)*broken*1.2))/12);
+ carrier.frequency.setValueAtTime(startF,t);carrier.frequency.linearRampToValueAtTime(endF,t+dur*.84);
+ thin.frequency.setValueAtTime(startF*.997,t);thin.frequency.linearRampToValueAtTime(endF*.998,t+dur*.84);
+ carrier.connect(blend);thin.connect(blend);
+ const frequencies=VOWELS[vowel];
+ for(let i=0;i<3;i++){
+  const filter=c.createBiquadFilter(),level=c.createGain();
+  filter.type='bandpass';filter.Q.value=[4.4,5.8,7.0][i];
+  filter.frequency.setValueAtTime(frequencies[i]*(.99+r()*.02),t);
+  filter.frequency.linearRampToValueAtTime(frequencies[i]*(1+(glide>0?.055:-.04)+broken*.025),t+dur*.76);
+  level.gain.value=[.91,.58,.33][i]*brightness;
+  blend.connect(filter);filter.connect(level);level.connect(env);
  }
- return voice;
+ const attack=consonant?.017:.022,release=Math.min(.065,dur*.26);
+ env.gain.setValueAtTime(.0001,t);
+ env.gain.linearRampToValueAtTime(.72,t+attack);
+ env.gain.setValueAtTime(.72,t+dur-release);
+ env.gain.linearRampToValueAtTime(.0001,end);
+ env.connect(tone);
+ carrier.start(t);thin.start(t);carrier.stop(end+.012);thin.stop(end+.012);
+ // Very short consonant onset, never a second syllable or a drum-like hit.
+ if(consonant==='b'||consonant==='n'){
+  noise(g,tone,t,{d:.009,a:.022,lp:1600,offset:r()});
+ }else if(consonant==='y'||consonant==='w'){
+  const lead=c.createOscillator(),e=c.createGain();lead.type='triangle';
+  lead.frequency.setValueAtTime(startF*.7,t);lead.frequency.linearRampToValueAtTime(startF,t+.035);
+  e.gain.setValueAtTime(.0001,t);e.gain.linearRampToValueAtTime(.06,t+.012);e.gain.linearRampToValueAtTime(.0001,t+.038);
+  lead.connect(e);e.connect(tone);lead.start(t);lead.stop(t+.045);
+ }
+ return out;
 }
 
-// FX are extra rhythmic ornaments, never changes to the saved MIDI-like pattern.
-// The same routine is called for live playback and offline TAPE rendering.
+// Real accidents are transformations of an actual rendered pad voice. The buffer
+// is generated before the event so no asynchronous work is done in the scheduler.
 const ACCIDENT_NAMES=['STUTTER','REVERSE','TAPE BEND','CRUSH'];
-function scheduleAccident(g,pad,at,kind,params={},bpm=100){
- const c=g.ctx,t=Math.max(.001,at),beat=60/clamp(bpm,48,180);
- const seed=(params.seed||1)>>>0,r=rng(seed^Math.imul((pad|0)+1,0x9e3779b1));
- const kit=params.kit|0,velocity=clamp(params.velocity??.55,.15,.9);
- const fx=c.createGain();fx.gain.value=.7;
- fx.connect(g.dry);
- const dryGraph={...g,dry:fx,reverbIn:g.reverbIn,delayIn:g.delayIn};
- if(kind===0){ // 16th/32nd-note stutters: a deliberately short decaying fill.
-  const stride=Math.max(.046,beat/8);
-  for(let i=0;i<4;i++){
-   const st=t+i*stride,gate=c.createGain();gate.gain.setValueAtTime(0,st);
-   gate.gain.linearRampToValueAtTime(.72-i*.14,st+.003);
-   gate.gain.setValueAtTime(.72-i*.14,st+stride*.55);
-   gate.gain.linearRampToValueAtTime(0,st+stride*.73);
-   gate.connect(fx);
-   const mini={...dryGraph,dry:gate};
-   scheduleKitVoice(mini,pad,st,{...params,velocity:velocity*(.82-i*.13),hold:false,fire:false});
+const FX_SAMPLE_SECONDS=1.05;
+async function renderFxSource(pad,params={}){
+ const Offline=window.OfflineAudioContext||window.webkitOfflineAudioContext;
+ if(!Offline)throw new Error('OfflineAudioContext unavailable');
+ const rate=22050,ctx=new Offline(2,Math.ceil(rate*FX_SAMPLE_SECONDS),rate);
+ const g=graph(ctx);
+ scheduleKitVoice(g,pad,.015,{...params,hold:false,fire:false,role:'fx-source'});
+ return ctx.startRendering();
+}
+function sliceBuffer(ctx,original,from,duration,{reverse=false,crush=false}={}){
+ const sr=original.sampleRate,start=Math.max(0,Math.floor(from*sr));
+ const n=Math.max(1,Math.min(Math.ceil(duration*sr),original.length-start));
+ const b=ctx.createBuffer(2,n,sr);
+ for(let channel=0;channel<2;channel++){
+  const input=original.getChannelData(Math.min(channel,original.numberOfChannels-1));
+  const out=b.getChannelData(channel);
+  if(crush){
+   // True sample-and-hold decimation plus low-bit-depth quantization.
+   let held=0;
+   for(let i=0;i<n;i++){
+    if(i%8===0)held=Math.round(input[start+i]*13)/13;
+    out[i]=held;
+   }
+  }else{
+   for(let i=0;i<n;i++)out[i]=input[start+(reverse?n-1-i:i)];
   }
- }else if(kind===1){ // True reverse of a synthesized tonal/noise fragment.
-  const duration=Math.min(.52,beat*.85),frames=Math.ceil(c.sampleRate*duration);
-  const buffer=c.createBuffer(1,frames,c.sampleRate),data=buffer.getChannelData(0);
-  const fundamental=(pad<4?100:pad<8?330:pad<12?510:230)*(1+kit*.06);
-  let noiseState=seed|0;
-  for(let i=0;i<frames;i++){
-   const u=i/frames,x=1-u;
-   noiseState^=noiseState<<13;noiseState^=noiseState>>>17;noiseState^=noiseState<<5;
-   const grain=((noiseState>>>0)/2147483648-1)*.19;
-   const phase=2*Math.PI*fundamental*duration*x;
-   // Reverse an ordinary decaying synthetic hit (small at first, strong at end).
-   data[i]=Math.sin(phase)*Math.pow(u,2.1)*.59+grain*Math.pow(u,1.5);
-  }
-  const src=c.createBufferSource(),env=c.createGain(),fl=c.createBiquadFilter();
-  fl.type='bandpass';fl.frequency.value=650+pad*75;fl.Q.value=.7;
-  env.gain.setValueAtTime(.0001,t);env.gain.linearRampToValueAtTime(velocity*.9,t+duration*.90);env.gain.linearRampToValueAtTime(.0001,t+duration);
-  src.buffer=buffer;src.connect(fl);fl.connect(env);env.connect(fx);src.start(t);src.stop(t+duration+.01);
- }else if(kind===2){ // Audible analogue-tape-like pitch and speed bend.
-  const duration=Math.min(.60,beat*1.0),samples=Math.ceil(c.sampleRate*.28);
-  const buffer=c.createBuffer(1,samples,c.sampleRate),wave=buffer.getChannelData(0);
-  const f=(kit===5?185:pad<4?93:pad<8?300:510)*(1+kit*.027);
-  for(let i=0;i<samples;i++){
-   const sec=i/c.sampleRate,edge=Math.min(1,i/90,(samples-i)/380);
-   wave[i]=(Math.sin(2*Math.PI*f*sec)+.23*Math.sin(2*Math.PI*f*sec*2.02))*edge*.55;
-  }
-  const src=c.createBufferSource(),env=c.createGain(),fl=c.createBiquadFilter();
-  src.buffer=buffer;src.loop=true;src.loopEnd=samples/c.sampleRate;
-  src.playbackRate.setValueAtTime(1.1,t);src.playbackRate.exponentialRampToValueAtTime(.43,t+duration*.83);
-  fl.type='lowpass';fl.frequency.setValueAtTime(2600,t);fl.frequency.exponentialRampToValueAtTime(430,t+duration);
-  env.gain.setValueAtTime(.0001,t);env.gain.linearRampToValueAtTime(velocity*.48,t+.018);
-  env.gain.setValueAtTime(velocity*.48,t+duration*.60);env.gain.linearRampToValueAtTime(.0001,t+duration);
-  src.connect(fl);fl.connect(env);env.connect(fx);src.start(t);src.stop(t+duration+.02);
- }else if(kind===3){ // Quantized waveshaper + stepped retrigger, not master clipping.
-  const crush=c.createWaveShaper(),curve=new Float32Array(1024),levels=16;
-  for(let i=0;i<curve.length;i++){
-   const x=i/(curve.length-1)*2-1;curve[i]=Math.round(Math.tanh(x*2.7)*levels)/levels;
-  }
-  crush.curve=curve;crush.oversample='none';
-  const gate=c.createGain();gate.gain.setValueAtTime(.0001,t);
-  gate.gain.linearRampToValueAtTime(.78,t+.008);
-  gate.gain.setValueAtTime(.78,t+Math.min(.17,beat*.3));
-  gate.gain.linearRampToValueAtTime(.0001,t+Math.min(.25,beat*.5));
-  gate.connect(crush);crush.connect(fx);
-  scheduleKitVoice({...dryGraph,dry:gate},pad,t,{...params,velocity:velocity*.82,fire:false});
  }
- return {kind,pad,time:t};
+ return b;
+}
+function scheduleAccident(g,pad,at,kind,params={},bpm=100,source){
+ if(!source||!source.length)return false;
+ const c=g.ctx,t=Math.max(.001,at),beat=60/clamp(bpm,48,180),velocity=clamp(params.velocity??.7,.2,1.1);
+ const r=rng(((params.seed||1)^Math.imul(pad+1,0x9e3779b1))>>>0);
+ // Level the transformed one-shot conservatively so short stutters stay audible.
+ let sourcePeak=0;const probe=source.getChannelData(0),scan=Math.min(probe.length,Math.floor(source.sampleRate*.55));
+ for(let i=0;i<scan;i+=4)sourcePeak=Math.max(sourcePeak,Math.abs(probe[i]));
+ const gainMatch=clamp(.14/Math.max(.035,sourcePeak),.75,2);
+ const level=c.createGain();level.gain.value=clamp(velocity*gainMatch,.36,1.25);level.connect(g.dry);
+ const start=.014,usable=Math.max(.045,source.duration-start-.025);
+ const clip=(offset,duration,when,rate=1,reverse=false,crush=false,volume=1,fade=.008)=>{
+  const length=Math.max(.025,Math.min(duration,usable-offset)),sample=sliceBuffer(c,source,start+offset,length,{reverse,crush});
+  const src=c.createBufferSource(),amp=c.createGain(),end=when+(length/rate);
+  src.buffer=sample;src.playbackRate.value=rate;
+  amp.gain.setValueAtTime(.00001,when);
+  amp.gain.linearRampToValueAtTime(Math.max(.0001,volume),when+Math.min(fade,length/rate*.2));
+  amp.gain.setValueAtTime(Math.max(.0001,volume),Math.max(when+.003,end-.012));
+  amp.gain.linearRampToValueAtTime(.00001,end);
+  src.connect(amp);amp.connect(level);src.start(when);src.stop(end+.002);
+  return {src,amp,end};
+ };
+ if(kind===0){
+  // Repeat an actual transient of the selected note; each hit replaces it.
+  const stride=Math.max(.043,beat/8),duration=Math.min(stride*.73,.085,usable);
+  for(let i=0;i<4;i++)clip(0,duration,t+i*stride,1,false,false,.88-i*.13,.003);
+ }else if(kind===1){
+  // Reverse real sound including its formants and texture, not synthesized noise.
+  const duration=Math.min(.40,beat*.78,usable);
+  clip(0,duration,t,1,true,false,.9,.006);
+ }else if(kind===2){
+  // Natural pitch/speed fall using a tape-style playback-rate envelope.
+  const duration=Math.min(.70,beat*1.12,usable),sample=sliceBuffer(c,source,start,duration);
+  const src=c.createBufferSource(),amp=c.createGain(),lowpass=c.createBiquadFilter();
+  src.buffer=sample;src.playbackRate.setValueAtTime(1.10,t);
+  src.playbackRate.exponentialRampToValueAtTime(.50,t+Math.min(.48,beat*.95));
+  lowpass.type='lowpass';lowpass.frequency.setValueAtTime(3800,t);
+  lowpass.frequency.exponentialRampToValueAtTime(680,t+Math.min(.55,beat));
+  const playDuration=Math.min(.72,beat*1.5);
+  amp.gain.setValueAtTime(.00001,t);amp.gain.linearRampToValueAtTime(.85,t+.012);
+  amp.gain.setValueAtTime(.85,t+playDuration*.55);
+  amp.gain.linearRampToValueAtTime(.00001,t+playDuration);
+  src.connect(lowpass);lowpass.connect(amp);amp.connect(level);
+  src.start(t);src.stop(t+playDuration+.006);
+ }else if(kind===3){
+  const duration=Math.min(.40,beat*.68,usable);
+  // A real PCM bitcrush rather than a waveshaper imitation.
+  clip(0,duration,t,1,false,true,.78,.005);
+ }
+ return {kind,pad,time:t,source:'rendered-pad'};
 }
 
 const KIT_NAMES=['PRESS','FALL','CORNER','BEND','TICK','WOOD','TIN','SNAP','VOWEL','GLASS','ERROR','CUT','REVERSE','HOLLOW','AIR','GHOST'];
-window.WrongAudio={graph,scheduleVoice,scheduleKitVoice,audioBufferToWav,rng,clamp,KIT_NAMES,KIT_TITLES,KIT_SHORT,KIT_PAD_NAMES,ACCIDENT_NAMES,scheduleAccident,scheduleSpeech};
+window.WrongAudio={graph,scheduleVoice,scheduleKitVoice,audioBufferToWav,rng,clamp,KIT_NAMES,KIT_TITLES,KIT_SHORT,KIT_PAD_NAMES,ACCIDENT_NAMES,scheduleAccident,scheduleSpeech,renderFxSource,sliceBuffer};
 })();

@@ -1,7 +1,7 @@
-/* WRONG NUMBER v0.2.2 — WRONG SPEECH / HAPPY ACCIDENTS */
+/* WRONG NUMBER v0.3.0 — LITTLE PERFORMANCE MACHINE */
 (()=>{'use strict';
 const A=window.WrongAudio,I=window.WrongIcons; if(!A||!I){document.body.textContent='AUDIO ENGINE FAILED';return;}
-const $=id=>document.getElementById(id), N=32, STORE='wrong-number-session-0.1';
+const $=id=>document.getElementById(id), N=32, STORE='wrong-number-session-0.1', HISTORY='wrong-number-undo-0.2.3', SLOTS='wrong-number-slots-0.3';
 const MAX_TAPE_SECONDS=30, TAPE_TAIL_SECONDS=2.5;
 const randomSeed=()=>((Math.random()*0xffffffff)>>>0);
 const deepCopy=v=>JSON.parse(JSON.stringify(v));
@@ -12,15 +12,45 @@ function validateScene(raw){
  return {bpm:A.clamp(Number(raw.bpm)||92,48,180),seed:(raw.seed>>>0)||3,groove:['open','full','classic','empty'].includes(raw.groove)?raw.groove:'classic',kit:A.clamp(Math.floor(Number(raw.kit)||0),0,A.KIT_TITLES.length-1),color:{broken:A.clamp(Number(raw.color?.broken)||.18,0,1),space:A.clamp(Number(raw.color?.space)||.25,0,1),shift:A.clamp(Number(raw.color?.shift)||0,-2,2)},events:raw.events.slice(0,64).filter(e=>Number.isInteger(e.step)&&e.step>=0&&e.step<N&&Number.isInteger(e.pad)&&e.pad>=0&&e.pad<16).map(e=>({step:e.step,pad:e.pad,velocity:A.clamp(Number(e.velocity)||.85,.2,1),variant:(e.variant>>>0)||1,origin:e.origin==='dub'?'dub':e.origin==='auto'?'auto':'legacy',expression:A.clamp(Number(e.expression)||0,-1,1)}))};
 }
 let scene=validateScene(getSaved(STORE))||newScene();
-let live=null,engine=null,isPlaying=false,scheduler=null,nextStep=0,nextTick=0,loopStarted=0,cycleAnchor=0,perfCounter=0,lastPadAt=new Map(),recent=[],downPointers=new Map(),pulseUntil=new Array(16).fill(0),lastPad=-1,displayMessage='READY / TOUCH A PAD',messageUntil=0,renderBusy=false,wavUrl=null,wavFile=null,tape=null,tapeClock=null,undoStack=[];
+let live=null,engine=null,isPlaying=false,scheduler=null,nextStep=0,nextTick=0,loopStarted=0,cycleAnchor=0,perfCounter=0,lastPadAt=new Map(),recent=[],downPointers=new Map(),pulseUntil=new Array(16).fill(0),lastPad=-1,displayMessage='READY / TOUCH A PAD',messageUntil=0,renderBusy=false,wavUrl=null,wavFile=null,tape=null,tapeClock=null,undoStack=(Array.isArray(getSaved(HISTORY))?getSaved(HISTORY):[]).slice(-8).map(validateScene).filter(Boolean);
 // JAM is always live and non-destructive. DUB is armed explicitly and stores
 // quantized events for the NEXT pass, never doubling the currently played tap.
 let dubArmed=false,pendingDub=[],dubUndoSaved=false,dubSessionCount=0,backingGraph=null;
 let countInEndAt=0,buildTake=0,streaks=new Map(),accidentUntil=0,accentBunny=1;
 let replyTimer=null,replyCooldown=0,replyCount=0,phraseHits=[];
-let lcdScreen='rabbits';
+let lcdScreen='rabbits',stepGroup=0;
+const slotNames=['A','B','C'];
+const storedSlots=getSaved(SLOTS);
+let savedSlots=(Array.isArray(storedSlots)?storedSlots:[]).slice(0,3).map(validateScene);
+while(savedSlots.length<3)savedSlots.push(null);
+let selectedSlot=-1,queuedSlot=-1;
+// Source snippets are pre-rendered on the first pad attack, then reused for deliberate gestures.
+const gestureSources=new Map();
+const GESTURE_LIMIT=12;
+
 let cycleSerial=0,activeAccident=null,fxUntil=0,fxLabel='';
-// One restrained FX gesture every four bars, deterministic for live and offline.
+let fxMode='SOFT'; // OFF / SOFT / WILD, switched by holding the LCD.
+const fxCache=new Map(),FX_CACHE_LIMIT=10;
+const fxParams=(plan,pattern)=>({kit:pattern.kit,seed:plan.sourceSeed,
+ velocity:plan.velocity,color:{...pattern.color,shift:A.clamp(pattern.color.shift+(plan.expression||0),-2,2)},role:'fx'});
+const fxKey=(pad,params)=>[pad,params.kit,params.seed,params.velocity.toFixed(3),
+ params.color.broken.toFixed(2),params.color.space.toFixed(2),params.color.shift.toFixed(2)].join(':');
+function fxCacheEntry(plan,pattern){
+ if(!plan)return null;
+ const params=fxParams(plan,pattern),key=fxKey(plan.pad,params);
+ return {key,params};
+}
+function prewarmFx(plan,pattern=scene){
+ const item=fxCacheEntry(plan,pattern);if(!item)return Promise.resolve(null);
+ if(fxCache.has(item.key))return fxCache.get(item.key);
+ const promise=A.renderFxSource(plan.pad,item.params).catch(err=>{
+  console.warn('FX prerender skipped:',err);fxCache.delete(item.key);return null;
+ });
+ fxCache.set(item.key,promise);
+ while(fxCache.size>FX_CACHE_LIMIT)fxCache.delete(fxCache.keys().next().value);
+ return promise;
+}
+// One short, constrained replacement every four bars (two 2-bar cycles).
 function chooseAccident(pattern,cycle){
  if(cycle%2!==1||!pattern.events.length)return null;
  const viable=pattern.events.filter(e=>e.pad>=4&&e.step>=8);
@@ -29,17 +59,28 @@ function chooseAccident(pattern,cycle){
  const preferred=viable.filter(e=>e.step>=20);
  const pool=preferred.length?preferred:viable;
  const event=pool[Math.floor(r()*pool.length)];
- return {pad:event.pad,step:event.step,velocity:.42,kind:Math.floor(r()*4),seed:(r()*0xffffffff)>>>0};
+ return {pad:event.pad,step:event.step,velocity:event.velocity,kind:Math.floor(r()*4),
+  seed:(r()*0xffffffff)>>>0,sourceSeed:(pattern.seed^event.variant^event.step)>>>0,
+  variant:event.variant,expression:event.expression||0};
 }
-function scheduleFx(plan,time,pattern=scene,offGraph=engine,record=true){
- if(!plan||!offGraph)return;
- const params={kit:pattern.kit,seed:plan.seed,velocity:plan.velocity,color:{...pattern.color},role:'fx'};
- A.scheduleAccident(offGraph,plan.pad,time,plan.kind,params,pattern.bpm);
+function scheduleFx(plan,time,pattern=scene,offGraph=engine,record=true,readyBuffer=null){
+ if(!plan||!offGraph)return false;
+ const item=fxCacheEntry(plan,pattern);
+ const buffer=readyBuffer||fxReady.get(item.key);
+ if(!buffer)return false; // No fake FX is substituted if the source is still loading.
+ A.scheduleAccident(offGraph,plan.pad,time,plan.kind,item.params,pattern.bpm,buffer);
  if(record&&tape&&time>=tape.startedAt&&time<tape.startedAt+MAX_TAPE_SECONDS)
-  tape.events.push({fx:true,at:time-tape.startedAt,pad:plan.pad,kind:plan.kind,bpm:pattern.bpm,params});
+  tape.events.push({fx:true,at:time-tape.startedAt,pad:plan.pad,kind:plan.kind,bpm:pattern.bpm,params:item.params});
  if(offGraph===engine){fxLabel=A.ACCIDENT_NAMES[plan.kind];fxUntil=performance.now()+850;
   accentBunny=(plan.pad+plan.kind)%3;accidentUntil=performance.now()+650;
   message('FX / '+fxLabel,1);}
+ return true;
+}
+const fxReady=new Map();
+function queueFx(plan,pattern=scene){
+ const item=fxCacheEntry(plan,pattern);if(!item)return;
+ prewarmFx(plan,pattern).then(buffer=>{if(buffer){fxReady.set(item.key,buffer);
+  while(fxReady.size>FX_CACHE_LIMIT)fxReady.delete(fxReady.keys().next().value);}});
 }
 
 
@@ -49,6 +90,41 @@ let glitchUntil=0,blankUntil=0,newUntil=0,visualBeat=0,newFlashTimer=null;
 const countInActive=()=>isPlaying&&countInEndAt>0&&stateAt()<countInEndAt;
 const readyBeats=()=>Math.max(1,Math.min(4,Math.ceil((countInEndAt-stateAt())/(60/scene.bpm))));
 const kitLabel=()=>A.KIT_TITLES[scene.kit]||A.KIT_TITLES[0];
+function updateSlots(){
+ slotNames.forEach((label,i)=>{
+  const b=$('slot-'+label.toLowerCase());if(!b)return;
+  b.classList.toggle('has-pattern',!!savedSlots[i]);
+  b.classList.toggle('is-selected',selectedSlot===i);
+  b.classList.toggle('is-queued',queuedSlot===i);
+  const dirty=selectedSlot===i&&savedSlots[i]&&JSON.stringify(validateScene(savedSlots[i]))!==JSON.stringify(validateScene(scene));
+  b.classList.toggle('is-dirty',!!dirty);
+  b.textContent=label+(dirty?'*':savedSlots[i]?'•':'');
+  b.setAttribute('aria-label',`${label}: ${savedSlots[i]?'tap to load, hold to save':'empty, tap to save'}`);
+ });
+}
+function persistSlots(){
+ try{localStorage.setItem(SLOTS,JSON.stringify(savedSlots));}catch{message('SLOT STORAGE FAILED',3);}
+ updateSlots();
+}
+function saveSlot(index){
+ if(index<0||index>2)return;
+ if(dubArmed&&pendingDub.length)commitDub();
+ savedSlots[index]=deepCopy(scene);selectedSlot=index;queuedSlot=-1;
+ persistSlots();message(`SAVED / SLOT ${slotNames[index]}`,1.6);
+}
+function loadSlot(index){
+ if(index<0||index>2)return;
+ if(!savedSlots[index]){saveSlot(index);return;}
+ if(dubArmed)setDub(false);
+ if(isPlaying){queuedSlot=index;message(`NEXT / SLOT ${slotNames[index]}`,2);updateSlots();return;}
+ applySlot(index);
+}
+function applySlot(index){
+ const next=validateScene(savedSlots[index]);if(!next){message('EMPTY SLOT',1);return;}
+ rememberUndo();scene=next;selectedSlot=index;queuedSlot=-1;
+ updatePadNames();persist();updateSlots();message(`LOADED / SLOT ${slotNames[index]}`,1.6);
+}
+
 const padLabel=pad=>(A.KIT_PAD_NAMES?.[scene.kit]||A.KIT_NAMES)[pad];
 function updateKitUi(){
  const name=kitLabel();
@@ -72,14 +148,14 @@ function displayMode(){
 }
 function updateText(){
  $('tempo-value').innerHTML=String(scene.bpm).padStart(3,'0')+' <small>BPM</small>';
- $('lcd-mode').textContent=lcdScreen==='steps'?'BEAT / VIEW':displayMode();
+ $('lcd-mode').textContent=lcdScreen==='steps'?`PADS ${String(stepGroup*4+1).padStart(2,'0')}-${String(stepGroup*4+4).padStart(2,'0')}`:displayMode();
  $('beat-readout').textContent=countInActive()?`${scene.bpm} BPM · IN ${readyBeats()}`:`${scene.bpm} BPM · ${isPlaying?`${1+Math.floor(visualBeat/16)}:${String(1+Math.floor(visualBeat%16/4)).padStart(2,'0')}`:'--:--'}`;
  $('btn-loop').setAttribute('aria-pressed',String(isPlaying));
  $('btn-dub').setAttribute('aria-pressed',String(dubArmed));
  $('btn-dub').setAttribute('aria-label',dubArmed?'Stop overdub recording':'Start overdub recording');
  $('btn-dub').querySelector('small').textContent=dubArmed?'● RECORDING':'OVERDUB';
  $('live-message').textContent=`${countInActive()?'READY '+readyBeats():dubArmed?(scene.groove==='empty'?'● TAKE '+Math.max(1,buildTake):'● DUB +'+pendingDub.length):isPlaying?'JAM':'READY'} / ${A.KIT_SHORT[scene.kit]} / ${scene.events.length.toString().padStart(2,'0')} HITS / ${scene.groove==='full'?'FULL':scene.groove==='empty'?'BLANK':'SPACE'}`; 
- updateKitUi();
+ updateKitUi();updateSlots();
 }
 function message(s,seconds=1.7){displayMessage=s;messageUntil=performance.now()+seconds*1000;$('status-text').textContent=s;updateText();}
 function persist(){try{localStorage.setItem(STORE,JSON.stringify(scene));}catch{message('STORAGE UNAVAILABLE');}updateText();}
@@ -150,8 +226,8 @@ function queueDub(pad,velocity,at,expression=0){
  const step=snapToStep(at);
  // Repeated hits on the same pad and grid step should not stack and clip.
  const found=pendingDub.find(e=>family(e.pad)===family(pad)&&circularDistance(e.step,step)<=1);
- if(found){found.pad=pad;found.step=step;found.velocity=Math.max(found.velocity,velocity);found.expression=expression;updateText();return;}
  if(!dubUndoSaved){rememberUndo();dubUndoSaved=true;}
+ if(found){found.pad=pad;found.step=step;found.velocity=Math.max(found.velocity,velocity);found.expression=expression;updateText();return;}
  pendingDub.push({pad,step,velocity,variant:randomSeed(),origin:'dub',expression});
  dubSessionCount++;
  updateText();
@@ -164,7 +240,7 @@ function commitDub(){
  const joined=[...scene.events,...pendingDub];
  const cap=scene.groove==='full'?40:28;
  scene.events=balancePattern(joined,cap);
- pendingDub=[];persist();
+ pendingDub=[];dubUndoSaved=false;persist();
  return count;
 }
 function setDub(armed){
@@ -202,6 +278,33 @@ function maybeReply(pad,now){
   phraseHits=[];
  },520);
 }
+function gestureSpec(pad){
+ const params={kit:scene.kit,seed:(scene.seed^Math.imul(pad+1,0x4b7d13a5))>>>0,
+  velocity:.82,color:{...scene.color},role:'performance'};
+ const key=[params.kit,pad,params.seed,params.color.shift.toFixed(2),params.color.broken.toFixed(2)].join(':');
+ return {key,params};
+}
+function prewarmGesture(pad){
+ const spec=gestureSpec(pad),present=gestureSources.get(spec.key);
+ if(present)return present;
+ const entry={buffer:null,pending:true,params:spec.params};
+ gestureSources.set(spec.key,entry);
+ while(gestureSources.size>GESTURE_LIMIT)gestureSources.delete(gestureSources.keys().next().value);
+ A.renderFxSource(pad,spec.params).then(buffer=>{entry.buffer=buffer;entry.pending=false;}).catch(()=>{
+  entry.pending=false;gestureSources.delete(spec.key);
+ });
+ return entry;
+}
+function performGestureFx(pad,time,kind,velocity){
+ const entry=prewarmGesture(pad);
+ if(!entry.buffer||!engine)return false;
+ const params={...entry.params,velocity};
+ A.scheduleAccident(engine,pad,time,kind,params,scene.bpm,entry.buffer);
+ if(tape&&time>=tape.startedAt&&time<tape.startedAt+MAX_TAPE_SECONDS)
+  tape.events.push({fx:true,at:time-tape.startedAt,pad,kind,bpm:scene.bpm,params});
+ pulse(pad);accentBunny=pad%3;accidentUntil=performance.now()+380;
+ return true;
+}
 function playPad(pad,options={}){
  if(!ensureAudio())return;
  const now=stateAt(),last=lastPadAt.get(pad)??-100;
@@ -210,9 +313,15 @@ function playPad(pad,options={}){
  streaks.set(pad,streak);
  const expression=A.clamp(streak*(pad%2?-.14:.16),-.75,.75);
  const velocity=options.hold?.47:rapid?.78:.92;
- const liveColor={...scene.color,shift:A.clamp(scene.color.shift+expression,-2,2),broken:A.clamp(scene.color.broken+streak*.055,0,1)};
+ const evolving=options.hold?Math.min(6,options.repeatCount||0):streak;
+ const liveColor={...scene.color,shift:A.clamp(scene.color.shift+expression+(options.hold?Math.sin(evolving*1.3)*.22:0),-2,2),broken:A.clamp(scene.color.broken+evolving*.055,0,1)};
  duckBacking(now);
- synth(pad,now+.003,velocity,{hold:options.hold,fire:rapid||options.hold,color:liveColor,role:'jam'});
+ // Repeated attacks unlock actual transformed-source gestures; first tap never waits for FX.
+ const gesture=(options.hold&&evolving>=3&&evolving%3===0)||(!options.hold&&streak>=2&&streak%3===2);
+ const kind=(pad+scene.kit+evolving)%4;
+ const transformed=gesture&&performGestureFx(pad,now+.003,kind,velocity*.92);
+ if(!transformed)synth(pad,now+.003,velocity,{hold:options.hold,fire:rapid||options.hold,color:liveColor,role:'jam'});
+ if((!options.hold&&streak===1)||(options.hold&&evolving===1))prewarmGesture(pad);
  if(streak>=3&&performance.now()>accidentUntil){accentBunny=pad%3;accidentUntil=performance.now()+650;}
  if(!options.hold){
   recent.push({pad,time:now,velocity:rapid?.72:.90,variant:perfCounter});
@@ -234,8 +343,8 @@ function beginHold(token,pad){
  const item={pad,timeout:null,count:0};
  const repeat=()=>{
   if(downPointers.get(token)!==item)return;
-  playPad(pad,{hold:true});
   item.count++;
+  playPad(pad,{hold:true,repeatCount:item.count});
   item.timeout=setTimeout(repeat,holdInterval(pad,item.count)*1000);
  };
  downPointers.set(token,item);
@@ -381,33 +490,56 @@ function scheduleAhead(){
   }
   if(step===0){
    if(pendingDub.length)commitDub();
-   activeAccident=chooseAccident(scene,cycleSerial);
+   if(queuedSlot!==-1){
+    const target=queuedSlot;applySlot(target);
+    cycleAnchor=time;loopStarted=time;cycleSerial=0;activeAccident=null;
+   }
+   activeAccident=fxMode==='OFF'?null:chooseAccident(scene,fxMode==='WILD'?(cycleSerial|1):cycleSerial);
+   // Prime the next four-bar variation well before its first playable step.
+   if(fxMode!=='OFF'&&cycleSerial%2===0)queueFx(chooseAccident(scene,cycleSerial+1),scene);
+   if(activeAccident)queueFx(activeAccident,scene);
    if(dubArmed&&scene.groove==='empty')buildTake++;
   }
   const stepEvents=scene.events.filter(e=>e.step===step);
+  const fxSlot=activeAccident&&step===activeAccident.step&&!countInActive()&&!dubArmed;
+  const fxItem=fxSlot?fxCacheEntry(activeAccident,scene):null;
+  const fxSource=fxItem?fxReady.get(fxItem.key):null;
+  let fxReplaced=false;
   for(const e of stepEvents){
+   if(fxSource&&!fxReplaced&&e.pad===activeAccident.pad&&e.variant===activeAccident.variant){
+    fxReplaced=scheduleFx(activeAccident,time,scene,engine,true,fxSource);if(fxReplaced)continue;
+   }
    const color={...scene.color,shift:A.clamp(scene.color.shift+(e.expression||0),-2,2)};
    synth(e.pad,time,e.velocity,{seed:(scene.seed^e.variant^e.step)>>>0,color,role:'loop'});
   }
-  if(activeAccident&&step===activeAccident.step&&!countInActive()&&!dubArmed)
-   scheduleFx(activeAccident,time);
   visualBeat=step;
   nextStep=(step+1)%N;nextTick+=stepSeconds();
   if(nextStep===0){loopStarted=nextTick;cycleSerial++;}
  }
 }
-function rememberUndo(){undoStack.push(deepCopy(scene));if(undoStack.length>8)undoStack.shift();}
+function saveHistory(){try{localStorage.setItem(HISTORY,JSON.stringify(undoStack));}catch{}}
+function rememberUndo(){undoStack.push(deepCopy(scene));if(undoStack.length>8)undoStack.shift();saveHistory();}
 function resetPlayhead(){if(isPlaying){nextStep=0;nextTick=stateAt()+.07;loopStarted=nextTick;cycleAnchor=nextTick;countInEndAt=0;}}
 function undo(){
- if(dubArmed){pendingDub=[];dubArmed=false;dubUndoSaved=false;}
- if(!undoStack.length){message('NO EARLIER MUTATION');return;}
- scene=undoStack.pop();resetPlayhead();persist();message('BACK / PREVIOUS VERSION');
+ // During recording, first undo the most recent not-yet-committed pad hit.
+ if(dubArmed&&pendingDub.length){
+  pendingDub.pop();dubSessionCount=Math.max(0,dubSessionCount-1);
+  if(!pendingDub.length&&dubUndoSaved){undoStack.pop();saveHistory();dubUndoSaved=false;}
+  updateText();message('UNDO / LAST HIT',1.1);return;
+ }
+ if(!undoStack.length){message('NOTHING TO UNDO',1.4);return;}
+ const wasBlank=scene.groove==='empty';
+ scene=undoStack.pop();saveHistory();
+ // Undo a take without leaving BLANK, unless the BLANK creation itself was undone.
+ if(dubArmed){pendingDub=[];dubUndoSaved=false;dubSessionCount=0;if(wasBlank&&scene.groove!=='empty')dubArmed=false;}
+ resetPlayhead();persist();message('UNDO / PREVIOUS BEAT',1.5);
 }
 function mutate(strong=false){
+ if(!scene.events.length&&scene.groove==='empty'){message('BLANK / RECORD SOME PADS FIRST',2);return;}
  if(dubArmed)setDub(false);
  rememberUndo();
- if(!scene.events.length&&scene.groove==='empty'){message('BLANK / RECORD SOME PADS FIRST',2);return;}
  if(!scene.events.length)scene.events=captureRecent();
+ if(!scene.events.length){message('PLAY A FEW PADS FIRST',2);return;}
  const original=scene.events.map(e=>({...e}));
  const r=A.rng((scene.seed^randomSeed())>>>0);
  // Rearrange a phrase, not layer new notes on top of it.
@@ -486,7 +618,14 @@ function blank(keepTempo=false){
 function tempo(delta){const wasCounting=countInActive();if(dubArmed&&pendingDub.length)commitDub();scene.bpm=A.clamp(scene.bpm+delta,48,180);if(wasCounting)startLoop({countIn:true});else resetPlayhead();persist();message(`${scene.bpm} BPM`,.8);}
 function bindControls(){
  const display=$('display-view');
- display.addEventListener('click',toggleLcd);
+ let lcdDown=0,lcdHandled=0;
+ const changeFxMode=()=>{fxMode=fxMode==='SOFT'?'WILD':fxMode==='WILD'?'OFF':'SOFT';activeAccident=null;
+  message('FX / '+fxMode,1.6);};
+ display.addEventListener('pointerdown',()=>{lcdDown=performance.now();});
+ display.addEventListener('pointerup',()=>{if(lcdDown&&performance.now()-lcdDown>=650){lcdHandled=performance.now();changeFxMode();}lcdDown=0;});
+ display.addEventListener('pointercancel',()=>{lcdDown=0;});
+ display.addEventListener('contextmenu',e=>e.preventDefault());
+ display.addEventListener('click',()=>{if(performance.now()-lcdHandled>650)toggleLcd();});
  display.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleLcd();}});
  $('btn-source').addEventListener('click',()=>setKit(scene.kit+1));
  $('kit-prev').addEventListener('click',()=>setKit(scene.kit-1));
@@ -529,6 +668,21 @@ function bindControls(){
   // Keyboard activation and accessibility-generated clicks do not require
   // pointerdown/pointerup, and remain supported.
   setDub(!dubArmed);
+ });
+ slotNames.forEach((label,i)=>{
+  const b=$('slot-'+label.toLowerCase());let down=0,lastPointer=-10000;
+  b.addEventListener('contextmenu',event=>event.preventDefault());
+  b.addEventListener('pointerdown',event=>{
+   if(event.pointerType==='mouse'&&event.button!==0)return;
+   down=performance.now();b.classList.add('is-touching');
+  });
+  b.addEventListener('pointerup',()=>{
+   if(!down)return;const long=performance.now()-down>=650;
+   down=0;lastPointer=performance.now();b.classList.remove('is-touching');
+   if(long)saveSlot(i);else loadSlot(i);
+  });
+  b.addEventListener('pointercancel',()=>{down=0;b.classList.remove('is-touching');});
+  b.addEventListener('click',()=>{if(performance.now()-lastPointer>600)loadSlot(i);});
  });
  $('tempo-down').addEventListener('click',()=>tempo(-2));$('tempo-up').addEventListener('click',()=>tempo(2));
  // Short BLANK uses a gentle practice tempo; hold to retain the current BPM.
@@ -603,13 +757,17 @@ async function exportWav(withFx=false){
   const cycleCount=withFx?4:3;
   const ctx=new (window.OfflineAudioContext||window.webkitOfflineAudioContext)(2,framesPerCycle*cycleCount+Math.ceil(sampleRate*.15),sampleRate);
   const g=A.graph(ctx),stepDuration=60/snapshot.bpm/4,baseline=.035;
+  const fxPlan=withFx?chooseAccident(snapshot,1):null;
+  const fxBuffer=fxPlan?await prewarmFx(fxPlan,snapshot):null;
   // Use the middle cycle to preserve reverb and delay wrapping over the seam.
   for(let cycle=0;cycle<cycleCount;cycle++){
+   let replaced=false;
    for(const ev of snapshot.events){const t=baseline+cycle*duration+ev.step*stepDuration;
+    if(withFx&&cycle===3&&fxBuffer&&fxPlan&&!replaced&&ev.step===fxPlan.step&&ev.pad===fxPlan.pad&&ev.variant===fxPlan.variant){
+     replaced=scheduleFx(fxPlan,t,snapshot,g,false,fxBuffer);if(replaced)continue;
+    }
     const params={seed:(snapshot.seed^ev.variant^ev.step)>>>0,velocity:ev.velocity,color:snapshot.color,kit:snapshot.kit};
     A.scheduleKitVoice(g,ev.pad,t,{...params,color:{...snapshot.color,shift:A.clamp(snapshot.color.shift+(ev.expression||0),-2,2)}});}
-   if(withFx&&cycle===3){const plan=chooseAccident(snapshot,1);if(plan)
-     scheduleFx(plan,baseline+cycle*duration+plan.step*stepDuration,snapshot,g,false);}
   }
   const rendered=await ctx.startRendering();
   const start=Math.round((baseline+(withFx?2:1)*duration)*sampleRate),end=start+framesPerCycle*(withFx?2:1);
@@ -651,9 +809,15 @@ async function stopTape(){
   const frames=Math.ceil((offset+total)*sampleRate);
   const ctx=new (window.OfflineAudioContext||window.webkitOfflineAudioContext)(2,frames,sampleRate);
   const g=A.graph(ctx),backing={...g,dry:g.backingDry};
+  // TAPE uses exactly the source voice captured for each live FX gesture.
+  const tapeFx=new Map();
+  for(const note of notes.filter(n=>n.fx)){
+   const key=fxKey(note.pad,note.params);
+   if(!tapeFx.has(key))tapeFx.set(key,await A.renderFxSource(note.pad,note.params));
+  }
   for(const note of notes){
    const at=offset+note.at;
-   if(note.fx){A.scheduleAccident(g,note.pad,at,note.kind,note.params,note.bpm);continue;}
+   if(note.fx){A.scheduleAccident(g,note.pad,at,note.kind,note.params,note.bpm,tapeFx.get(fxKey(note.pad,note.params)));continue;}
    if(note.params.role==='jam'){
     const gain=g.backingDry.gain;
     // In the offline copy, faithfully reproduce accompaniment ducking.
@@ -672,21 +836,28 @@ async function stopTape(){
 
 function paintSequence(ctx,w,h,colors){
  const {dark,light,inner,medium}=colors;
+ const firstPad=stepGroup*4;
  const bar=isPlaying&&!countInActive()?Math.floor(visualBeat/16):0;
  const start=bar*16,cell=(w-43)/16,row=Math.min(17,(h-8)/4);
  ctx.save();ctx.textBaseline='middle';ctx.textAlign='left';
  ctx.font='bold 10px monospace';
- for(let pad=0;pad<4;pad++){
-  const y=5+pad*row;
+ for(let rowIndex=0;rowIndex<4;rowIndex++){
+  const pad=firstPad+rowIndex;
+  const y=5+rowIndex*row;
   ctx.fillStyle=dark;ctx.fillText(String(pad+1).padStart(2,'0'),2,y+row*.45);
   for(let step=0;step<16;step++){
-   const hits=scene.events.filter(e=>e.pad===pad&&e.step===start+step);
+   const hits=scene.events.some(e=>e.pad===pad&&e.step===start+step);
+   const queued=dubArmed&&pendingDub.some(e=>e.pad===pad&&e.step===start+step);
    const x=31+step*cell;
    ctx.fillStyle=step%4===0?medium:inner;
    ctx.fillRect(Math.round(x),Math.round(y+1),Math.max(2,Math.floor(cell-2)),Math.max(5,Math.round(row-5)));
-   if(hits.length){
+   if(hits){
     ctx.fillStyle=dark;
     ctx.fillRect(Math.round(x),Math.round(y+1),Math.max(2,Math.floor(cell-2)),Math.max(5,Math.round(row-5)));
+   }
+   if(queued){
+    ctx.fillStyle=medium;ctx.fillRect(Math.round(x),Math.round(y+1),Math.max(2,Math.floor(cell-2)),Math.max(5,Math.round(row-5)));
+    ctx.fillStyle=dark;ctx.fillRect(Math.round(x+2),Math.round(y+3),Math.max(1,Math.floor(cell-6)),Math.max(2,Math.round(row-9)));
    }
    if(isPlaying&&!countInActive()&&Math.floor(visualBeat/16)===bar&&visualBeat%16===step){
     ctx.fillStyle=dark;ctx.fillRect(Math.round(x),Math.round(y+row-2),Math.max(2,Math.floor(cell-2)),2);
@@ -696,8 +867,10 @@ function paintSequence(ctx,w,h,colors){
  ctx.restore();
 }
 function toggleLcd(){
- lcdScreen=lcdScreen==='rabbits'?'steps':'rabbits';
- $('display-view').setAttribute('aria-label',lcdScreen==='steps'?'Beat display. Tap to see rabbits.':'Dancing rabbits. Tap to see pads 1 to 4.');
+ if(lcdScreen==='rabbits'){lcdScreen='steps';stepGroup=0;}
+ else if(stepGroup<3)stepGroup++;
+ else lcdScreen='rabbits';
+ $('display-view').setAttribute('aria-label',lcdScreen==='steps'?`Beat display for pads ${stepGroup*4+1} to ${stepGroup*4+4}. Tap to view next group.`:'Dancing rabbits. Tap to view the beat.');
  updateText();
 }
 
@@ -709,11 +882,11 @@ function paint(ctx,w,h){
  const beat=isPlaying?Math.floor(Math.max(0,(stateAt()-(countInActive()?countInEndAt:cycleAnchor))/stepSeconds())/2):Math.floor(now/640);
  const glitch=now<glitchUntil,building=now<blankUntil,brandNew=now<newUntil;
  const hit=pulseUntil.some(x=>x>now),mode=displayMode();
- const actualMode=lcdScreen==='steps'?'BEAT / VIEW':mode;
+ const actualMode=lcdScreen==='steps'?`PADS ${String(stepGroup*4+1).padStart(2,'0')}-${String(stepGroup*4+4).padStart(2,'0')}`:mode;
  if($('lcd-mode').textContent!==actualMode)$('lcd-mode').textContent=actualMode;
  if(countInActive())$('beat-readout').textContent=`${scene.bpm} BPM · IN ${readyBeats()}`;
  else if(isPlaying)$('beat-readout').textContent=`${scene.bpm} BPM · ${1+Math.floor(visualBeat/16)}:${String(1+Math.floor(visualBeat%16/4)).padStart(2,'0')}`;
- if(now>messageUntil){const neutral=lcdScreen==='steps'?`01-04 / BAR ${isPlaying?1+Math.floor(visualBeat/16):1} OF 2`:tape?'TAPE / RECORDING':countInActive()?`GET READY / ${readyBeats()} BEATS`:dubArmed&&scene.groove==='empty'?`TAKE ${Math.max(1,buildTake)} / KEEP PLAYING`:dubArmed?`● OVERDUB / ${pendingDub.length} QUEUED`:isPlaying?'JAM / PLAY ALONG':'TAP TO PLAY';if($('status-text').textContent!==neutral)$('status-text').textContent=neutral;}
+ if(now>messageUntil){const neutral=lcdScreen==='steps'?`${String(stepGroup*4+1).padStart(2,'0')}-${String(stepGroup*4+4).padStart(2,'0')} / BAR ${isPlaying?1+Math.floor(visualBeat/16):1} OF 2`:tape?'TAPE / RECORDING':countInActive()?`GET READY / ${readyBeats()} BEATS`:dubArmed&&scene.groove==='empty'?`TAKE ${Math.max(1,buildTake)} / KEEP PLAYING`:dubArmed?`● OVERDUB / ${pendingDub.length} QUEUED`:isPlaying?'JAM / PLAY ALONG':'TAP TO PLAY';if($('status-text').textContent!==neutral)$('status-text').textContent=neutral;}
  const dark='#2a4930',light='#b9eb90',inner='#8bbc66',medium='#668a4b';
  ctx.imageSmoothingEnabled=false;ctx.clearRect(0,0,w,h);ctx.fillStyle=light;ctx.fillRect(0,0,w,h);
  // Dot paper texture remains stationary; no waveform or oscillogram.
@@ -853,7 +1026,7 @@ function attemptP5(){
  script.onerror=()=>console.info('p5 CDN unavailable; internal Canvas fallback active');
  document.head.appendChild(script);
 }
-function init(){renderPads();bindControls();updateText();startCanvasFallback();attemptP5();if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('./sw.js?v=0.2.2', {updateViaCache:'none'}).catch(err=>console.warn('SW:',err));}
+function init(){renderPads();bindControls();updateSlots();updateText();startCanvasFallback();attemptP5();if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('./sw.js?v=0.3.0', {updateViaCache:'none'}).catch(err=>console.warn('SW:',err));}
 init();
-window.WrongNumberDebug={chooseAccident,scheduleFx,exportWav,cycleSerial:()=>cycleSerial,activeAccident:()=>activeAccident,blank,countInActive,readyBeats,getCountInEnd:()=>countInEndAt,getTake:()=>buildTake,getReplies:()=>replyCount,flashNew,balancePattern,generateOpen,generateFull,getScene:()=>deepCopy(scene),isPlaying:()=>isPlaying,isRecording:()=>!!tape,isDubArmed:()=>dubArmed,pendingDub:()=>deepCopy(pendingDub),setDub,commitDub,snapToStep,cycleAnchor:()=>cycleAnchor,visualState:()=>({blankUntil,newUntil,glitchUntil}),playPad,captureRecent,mutate,fresh,undo,startLoop,stopLoop,startTape,stopTape,exportWav,renderPads,setKit,kitLabel,audioState:()=>({context:live?.state||'none',kit:scene.kit,master:engine?.dry?.gain?.value??null})};
+window.WrongNumberDebug={getTapeEventKinds:()=>tape?tape.events.map(e=>e.fx?'fx':e.params?.role||'note'):[],getSlots:()=>deepCopy(savedSlots),getSelectedSlot:()=>selectedSlot,getQueuedSlot:()=>queuedSlot,saveSlot,loadSlot,applySlot,gestureSpec,prewarmGesture,performGestureFx,stepGroup:()=>stepGroup,lcdScreen:()=>lcdScreen,toggleLcd,getUndoCount:()=>undoStack.length,saveHistory,queueDub,paintSequence,chooseAccident,scheduleFx,exportWav,cycleSerial:()=>cycleSerial,activeAccident:()=>activeAccident,blank,countInActive,readyBeats,getCountInEnd:()=>countInEndAt,getTake:()=>buildTake,getReplies:()=>replyCount,flashNew,balancePattern,generateOpen,generateFull,getScene:()=>deepCopy(scene),isPlaying:()=>isPlaying,isRecording:()=>!!tape,isDubArmed:()=>dubArmed,pendingDub:()=>deepCopy(pendingDub),setDub,commitDub,snapToStep,cycleAnchor:()=>cycleAnchor,visualState:()=>({blankUntil,newUntil,glitchUntil,fxMode}),playPad,captureRecent,mutate,fresh,undo,startLoop,stopLoop,startTape,stopTape,exportWav,renderPads,setKit,kitLabel,audioState:()=>({context:live?.state||'none',kit:scene.kit,master:engine?.dry?.gain?.value??null})};
 })();

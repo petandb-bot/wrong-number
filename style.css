@@ -1,6 +1,6 @@
-/* WRONG NUMBER v0.2.2 — HAPPY ACCIDENTS */
+/* WRONG NUMBER v0.3.0 — LITTLE PERFORMANCE MACHINE */
 :root{font-family:ui-rounded,system-ui,-apple-system,"Arial Rounded MT Bold",sans-serif;color:#30113b;background:#301036;font-synthesis:none;-webkit-text-size-adjust:100%}
-*{box-sizing:border-box}html{min-height:100%;background:#301036}body{margin:0;min-height:100dvh;padding:calc(env(safe-area-inset-top) + 6px) 8px calc(env(safe-area-inset-bottom) + 12px);background:radial-gradient(ellipse at 50% 0%,#6f224f,#2c113b 64%);touch-action:manipulation;overscroll-behavior-y:contain}
+*{box-sizing:border-box}html{min-height:100%;background:#301036}body{margin:0;min-height:100dvh;padding:calc(env(safe-area-inset-top) + 6px) 8px calc(env(safe-area-inset-bottom) + 4px);background:radial-gradient(ellipse at 50% 0%,#6f224f,#2c113b 64%);touch-action:manipulation;overscroll-behavior-y:contain}
 button{font:inherit;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation;user-select:none;-webkit-user-select:none;color:inherit}button:focus-visible,summary:focus-visible,a:focus-visible{outline:3px solid #cbf542;outline-offset:3px}button:disabled{filter:grayscale(.5);opacity:.55;cursor:not-allowed}
 .shell{width:min(100%,434px);margin:0 auto;overflow:hidden;position:relative;padding:10px 12px 12px;background:linear-gradient(136deg,#ff98c8 0%,#fc51aa 25%,#fa3996 75%,#dc2481 100%);border:3px solid #ffc0df;border-radius:28px 28px 34px 34px;box-shadow:inset 3px 3px 0 #ffd6ea,inset -4px -4px 0 #9b1a6d,0 5px 0 #83155c,0 17px 36px #09001399}
 .header{display:flex;align-items:center;justify-content:space-between;gap:6px;margin:0 0 7px;min-height:35px}
@@ -31,7 +31,7 @@ button{font:inherit;cursor:pointer;-webkit-tap-highlight-color:transparent;touch
 .bottom-strip{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin:0 1px}
 .utility{height:38px;min-width:0;padding:0 2px;border:2px solid #31113f;border-bottom-width:4px;border-radius:10px;box-shadow:inset 1px 2px 0 #ffffff8c,0 2px 0 #82215f;font:1000 clamp(10px,2.45vw,12px)/1 ui-monospace,monospace;white-space:nowrap}.utility-undo,.utility-new{background:#dba4fc}.utility-tape{background:#81d9ff}.utility-tape.is-recording{background:#ff6b89}.utility-export{background:#eaff5d}
 .footer-line{display:flex;justify-content:space-between;align-items:center;gap:5px;margin:7px 2px 0;font:900 9px/1 ui-monospace,monospace;color:#4b244c}.footer-line span:first-child{white-space:nowrap;text-overflow:ellipsis;overflow:hidden}
-.help{max-width:434px;margin:9px auto 0;border:1px solid #dca2e1;border-radius:10px;background:#451e54;color:#ffe4f1;overflow:hidden;font-size:12px}.help summary{padding:8px 12px;font-weight:900;cursor:pointer;list-style-position:inside}.help-content{padding:2px 12px 12px;line-height:1.5}.help b{color:#eaff80}.help p{margin:9px 0}.help kbd{font:10px ui-monospace,monospace}
+.help{max-width:434px;margin:6px auto 0;border:1px solid #dca2e1;border-radius:10px;background:#451e54;color:#ffe4f1;overflow:hidden;font-size:12px}.help summary{padding:8px 12px;font-weight:900;cursor:pointer;list-style-position:inside}.help-content{padding:2px 12px 12px;line-height:1.5}.help b{color:#eaff80}.help p{margin:9px 0}.help kbd{font:10px ui-monospace,monospace}
 .export-panel{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 14px);transform:translateX(-50%);width:min(calc(100% - 28px),430px);z-index:20;padding:14px 16px;display:flex;flex-wrap:wrap;align-items:center;gap:9px;border:3px solid #37173e;border-radius:17px;background:#f4fbd3;color:#34134b;box-shadow:0 8px 0 #53234b,0 14px 42px #0008;font:900 12px ui-monospace,monospace}.export-panel[hidden]{display:none}.export-panel a,.export-panel button:not(.export-close){padding:9px 12px;border:2px solid #31153c;border-radius:9px;background:#a6ff69;text-decoration:none;color:#30153e;font:900 12px ui-monospace,monospace}.export-close{margin-left:auto;border:0;background:transparent;font-size:24px;padding:0 5px}
 @media(max-width:360px){body{padding-left:5px;padding-right:5px}.shell{padding:8px 8px 10px}.header{min-height:30px;margin-bottom:4px}.brand{font-size:20px}.brand-meta{font-size:6px}.pad{height:clamp(65px,11vh,83px);border-radius:12px}.pads{margin-bottom:7px}.command-row{margin-bottom:6px}.command{height:43px}.utility{height:35px}}
 @media(max-height:760px){.shell{padding-top:7px;padding-bottom:7px}.header{min-height:27px;margin-bottom:4px}.lcd-case{padding:5px 6px 3px}.display-view{height:clamp(66px,11vh,85px)}.lcd{padding:4px 7px 2px}.lcd-label{padding-top:2px}.toolbar{margin:6px 0}.pad{height:clamp(63px,10.6vh,83px)}.pads{margin-bottom:6px}.command{height:44px}.command-row{margin-bottom:5px}.utility{height:34px}.footer-line{margin-top:5px}}
@@ -72,3 +72,15 @@ button{font:inherit;cursor:pointer;-webkit-tap-highlight-color:transparent;touch
 /* The LCD is an accessible read-only alternate display, not a step editor. */
 .display-view{cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
 .display-view:focus-visible{outline:2px dashed #325139;outline-offset:-2px}
+
+/* Pattern memories use the existing footer without creating a new control row. */
+.footer-line{min-height:21px}.footer-line>span:first-child{min-width:0;flex:1}
+.pattern-slots{display:flex;align-items:center;gap:4px;flex-shrink:0}
+.slot-label{font:900 8px ui-monospace,monospace;margin-right:1px}
+.slot{min-width:27px;height:23px;padding:0 3px;border:2px solid #35173d;border-bottom-width:3px;border-radius:7px;background:#f3c8e8;color:#3b2147;font:1000 11px/1 ui-monospace,monospace;touch-action:manipulation;-webkit-touch-callout:none}
+.slot.has-pattern{background:#d6f88d}.slot.is-selected{outline:2px solid #52204b;outline-offset:1px}.slot.is-queued{background:#ffe95c;animation:slotpulse .6s steps(2,end) infinite}.slot.is-touching{transform:translateY(2px)}
+@keyframes slotpulse{50%{filter:brightness(.82)}}
+@media(max-width:360px){.pattern-slots{gap:2px}.slot{min-width:25px;height:21px}.slot-label{font-size:7px}}
+@media(prefers-reduced-motion:reduce){.slot.is-queued{animation:none}}
+
+.slot.is-dirty{background:#ffda77}.slot.is-dirty.is-selected{outline-color:#8c2d51}

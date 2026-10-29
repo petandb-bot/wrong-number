@@ -1,7 +1,7 @@
 const fs=require('fs'),vm=require('vm'),assert=require('assert');
-const base='/mnt/data/wrong-number-v0.2.2/';
+const path=require('path');const base=path.resolve(__dirname,'..')+'/';
 class Element {
- constructor(id=''){this.id=id;this.children=[];this.style={};this.listeners={};this.className='';this._html='';this._text='';this.attributes={};this.clientWidth=334;this.clientHeight=75;this.hidden=false;this.classList={add(){},remove(){},contains(){return false}};this.small={textContent:''};this.label={textContent:''};}
+ constructor(id=''){this.id=id;this.children=[];this.style={};this.listeners={};this.className='';this._html='';this._text='';this.attributes={};this.clientWidth=334;this.clientHeight=75;this.hidden=false;this.classList={add(){},remove(){},toggle(){},contains(){return false}};this.small={textContent:''};this.label={textContent:''};}
  set textContent(t){this._text=t}get textContent(){return this._text}
  set innerHTML(t){this._html=t;this.label={textContent:''}}get innerHTML(){return this._html}
  appendChild(c){this.children.push(c);c.parentNode=this;return c}
@@ -24,10 +24,10 @@ class FakeAudioContext {constructor(){this.sampleRate=22050;this.currentTime=.2;
 
 class FakeOfflineAudioContext extends FakeAudioContext {
  constructor(ch,frames,rate){super();this.sampleRate=rate;this.frames=frames;this.channels=ch;}
- async startRendering(){const arr=Array.from({length:this.channels},()=>new Float32Array(this.frames));return {sampleRate:this.sampleRate,numberOfChannels:this.channels,getChannelData:i=>arr[i]};}
+ async startRendering(){const arr=Array.from({length:this.channels},()=>new Float32Array(this.frames));return {length:this.frames,duration:this.frames/this.sampleRate,sampleRate:this.sampleRate,numberOfChannels:this.channels,getChannelData:i=>arr[i]};}
 }
 const nodes=new Map();function elt(id){if(!nodes.has(id))nodes.set(id,new Element(id));return nodes.get(id)}
-const ids=['btn-source','lcd-kit','lcd-mode','beat-readout','tempo-value','btn-loop','btn-dub','live-message','status-text','pads','kit-prev','kit-next','tempo-down','tempo-up','btn-mutate','btn-blank','btn-undo','btn-tape','btn-new','btn-export','btn-close-export','btn-share','export-panel','export-status','download-link','display-view','display-fallback','p5-container'];ids.forEach(elt);
+const ids=['btn-source','lcd-kit','lcd-mode','beat-readout','tempo-value','btn-loop','btn-dub','live-message','status-text','pads','kit-prev','kit-next','tempo-down','tempo-up','btn-mutate','btn-blank','btn-undo','btn-tape','btn-new','btn-export','btn-close-export','btn-share','export-panel','export-status','download-link','display-view','display-fallback','p5-container','slot-a','slot-b','slot-c'];ids.forEach(elt);
 const doc={getElementById:elt,createElement:tag=>new Element(tag),addEventListener(){},head:new Element('head'),body:new Element('body')};
 const store=new Map();
 const ctx={window:{addEventListener(){},AudioContext:FakeAudioContext,OfflineAudioContext:FakeOfflineAudioContext},document:doc,console,Math,JSON,performance:{now:()=>123456},setTimeout:(fn,ms)=>{if(ms===30)fn();return 1},clearTimeout:()=>{},setInterval:()=>1,clearInterval:()=>{},requestAnimationFrame:()=>1,cancelAnimationFrame:()=>{},localStorage:{getItem:k=>store.get(k)||null,setItem:(k,v)=>store.set(k,v)},location:{protocol:'file:'},navigator:{},Blob,File:class {},ArrayBuffer,DataView,Float32Array,URL,Date};
@@ -38,12 +38,12 @@ assert(D,'app loaded');
 assert.strictEqual(elt('pads').children.length,16);
 assert.strictEqual(ctx.window.WrongAudio.KIT_TITLES.length,6);
 elt('display-view').dispatch('click');
-assert.strictEqual(elt('lcd-mode').textContent,'BEAT / VIEW');
-elt('display-view').dispatch('keydown',{key:'Enter'});
-assert.notStrictEqual(elt('lcd-mode').textContent,'BEAT / VIEW');
+assert.strictEqual(elt('lcd-mode').textContent,'PADS 01-04');
+for(let group=0;group<4;group++)elt('display-view').dispatch('keydown',{key:'Enter'});
+assert.strictEqual(D.lcdScreen(),'rabbits');
 D.setKit(5);
 assert.strictEqual(D.getScene().kit,5);
-assert.strictEqual(elt('pads').children[0].label.textContent,'HELLO');
+assert.strictEqual(elt('pads').children[0].label.textContent,'AH');
 D.fresh(false);
 const ev=D.getScene().events;
 assert(ev.length>=10&&ev.length<=16,`NEW sparse ${ev.length}`);
@@ -64,6 +64,50 @@ assert(choice===null || (choice.step>=0&&choice.step<32&&choice.kind>=0&&choice.
 if(choice){D.scheduleFx(choice,0.4,pattern,ctx.window.WrongAudio.graph(new FakeAudioContext()),false);}
 console.log('PASS: accident choice deterministic, speech labels, audio synthesis and legacy controls');
 
+// The first overdub hit appears instantly as a pending note. UNDO removes
+// only the last uncommitted hit and leaves the recording running.
+D.startLoop();
+D.setDub(true);
+const countBefore=D.getUndoCount();
+D.queueDub(0,.85,D.cycleAnchor()+.12);
+assert.strictEqual(D.pendingDub().length,1);
+assert.strictEqual(D.getUndoCount(),countBefore+1);
+D.undo();
+assert.strictEqual(D.pendingDub().length,0);
+assert(D.isDubArmed());
+assert.strictEqual(D.getUndoCount(),countBefore);
+D.queueDub(1,.85,D.cycleAnchor()+.40);
+D.commitDub();
+assert.strictEqual(D.getScene().events.length,1);
+D.undo();
+assert.strictEqual(D.getScene().events.length,0);
+assert(D.isDubArmed());
+D.setDub(false);
+assert(Array.isArray(JSON.parse(store.get('wrong-number-undo-0.2.3'))));
+console.log('PASS: DUB pending note, per-take UNDO, history persistence');
+
+
+
+// Pattern memories are independent of the session/undo stack.
+D.fresh(false);
+const beforeSave=D.getScene();
+D.saveSlot(0);
+assert(D.getSlots()[0]&&D.getSlots()[0].events.length===beforeSave.events.length);
+D.setKit(4);
+D.saveSlot(1);
+assert(D.getSlots()[1].kit===4);
+D.stopLoop();
+D.loadSlot(0);
+assert.strictEqual(D.getScene().kit,beforeSave.kit);
+assert.strictEqual(D.getSelectedSlot(),0);
+assert(Array.isArray(JSON.parse(store.get('wrong-number-slots-0.3'))));
+D.startLoop();D.loadSlot(1);
+assert.strictEqual(D.getQueuedSlot(),1);
+D.stopLoop();D.applySlot(1);
+assert.strictEqual(D.getScene().kit,4);
+D.prewarmGesture(4);
+console.log('PASS 0.3.0: five LCD states, three pattern memories, queued recall, gesture FX preload');
+
 (async()=>{
  D.fresh(false);const scene=D.getScene();
  await D.exportWav(false);
@@ -76,7 +120,8 @@ console.log('PASS: accident choice deterministic, speech labels, audio synthesis
  const current=D.getScene();
  const fx=D.chooseAccident(current,1);
  assert(fx,'FX candidate must exist for sparse pattern');
- D.scheduleFx(fx,live.currentTime+.13,current,ctx.window.WrongAudio.graph(live),true);
+ const source=await ctx.window.WrongAudio.renderFxSource(fx.pad,{kit:current.kit,seed:fx.sourceSeed,velocity:fx.velocity,color:current.color});
+ assert(D.scheduleFx(fx,live.currentTime+.13,current,ctx.window.WrongAudio.graph(live),true,source));
  live.currentTime+=1.2;
  await D.stopTape();
  assert(elt('download-link').download.includes('tape'));

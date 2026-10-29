@@ -11,20 +11,20 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="apple-touch-icon" href="assets/icon-180.png">
   <link rel="icon" href="assets/icon-192.png">
-  <link rel="stylesheet" href="style.css?v=0.2.2">
-  <title>WRONG NUMBER — HAPPY ACCIDENTS (v0.2.2)</title>
+  <link rel="stylesheet" href="style.css?v=0.3.0">
+  <title>WRONG NUMBER — LITTLE PERFORMANCE MACHINE (v0.3.0)</title>
 </head>
 <body>
   <main class="shell" aria-label="WRONG NUMBER pocket instrument">
     <header class="header">
       <div class="brand"><span class="brand-spark" aria-hidden="true">✳</span> WRONG NUMBER <span class="brand-sticker" aria-hidden="true">♡!</span></div>
-      <div class="brand-meta"><span>little accidents / no. 022</span><span class="power-led" aria-hidden="true"></span></div>
+      <div class="brand-meta"><span>little accidents / no. 030</span><span class="power-led" aria-hidden="true"></span></div>
     </header>
 
     <section class="lcd-case" aria-label="Instrument status display">
       <div class="lcd">
         <div class="lcd-top"><span id="lcd-kit">01 / CANDY KIT</span><span id="lcd-mode">READY</span></div>
-        <div class="display-view" id="display-view" role="button" tabindex="0" aria-label="Dancing rabbits. Tap to see pads 1 to 4." title="Tap to show or hide a 16-step view for pads 01–04">
+        <div class="display-view" id="display-view" role="button" tabindex="0" aria-label="Dancing rabbits. Tap to cycle through four pad groups." title="Tap: rabbits / 01–04 / 05–08 / 09–12 / 13–16. Hold: FX mode">
           <canvas id="display-fallback" width="320" height="100"></canvas>
           <div id="p5-container" aria-hidden="true"></div>
         </div>
@@ -59,25 +59,22 @@
       <a id="download-link" href="#" download="wrong-number-loop.wav" hidden>DOWNLOAD WAV</a>
       <button id="btn-share" hidden>SHARE / SAVE TO FILES</button>
     </div>
-    <footer class="footer-line"><span id="live-message">CANDY KIT / READY</span><span>v0.2.2 ✳</span></footer>
+    <footer class="footer-line"><span id="live-message">CANDY KIT / READY</span><nav class="pattern-slots" aria-label="Pattern memory slots"><span class="slot-label">MEM</span><button type="button" id="slot-a" class="slot" title="Tap: recall or save empty slot. Hold: save">A</button><button type="button" id="slot-b" class="slot" title="Tap: recall or save empty slot. Hold: save">B</button><button type="button" id="slot-c" class="slot" title="Tap: recall or save empty slot. Hold: save">C</button></nav></footer>
   </main>
   <details class="help" lang="ja">
     <summary>使い方</summary>
     <div class="help-content">
-      <p><b>はじめに：</b>BLANKでゼロから作るか、NEWでビートを生成。</p>
-      <p><b>PAD：</b>タップで発音。連打すると音が変わり、長押しでリピート。</p>
-      <p><b>BLANK：</b>4拍の合図で録音開始。何周でも重ね録りできます。速いBPMでは96へ調整。長押しで現在のBPMを維持。</p>
-      <p><b>DUB：</b>押すまで重ね録りが続きます。もう一度押して終了。</p>
-      <p><b>MUTATE：</b>ビートを変化させます。長押しすると変化が大きくなります。</p>
-      <p><b>UNDO：</b>直前のNEW、BLANK、MUTATE、DUBを取り消します。</p>
-      <p><b>FX：</b>演奏中、ときどき短い音響事故が起こります。録音中は邪魔しません。WAV長押しでFX入り4小節を書き出せます。</p>
-      <p><b>液晶：</b>タップでうさぎと01〜04のビート表示を切り替え。再生中は小節を自動表示。</p>
-      <p><b>NEW長押し：</b>音数の多いビートを生成。JAM中は時々小さな返事が鳴ります。</p>
-      <p><b>TAPE / WAV：</b>演奏を録音／ループを書き出し。</p>
+      <p><b>PAD：</b>タップで鳴らす。連打・長押しで音が変化。</p>
+      <p><b>NEW / BLANK：</b>自動生成するか、4拍の合図から自分で作る。</p>
+      <p><b>LOOP / DUB：</b>再生・停止と、何周でも重ね録り。</p>
+      <p><b>MUTATE / UNDO：</b>リズムを変える／ひとつ戻る。</p>
+      <p><b>液晶：</b>タップでうさぎ→4組のステップ表示。長押しでFX切替。</p>
+      <p><b>MEM A/B/C：</b>空の枠はタップで保存、保存済みはタップで呼び出し。長押しで上書き。＊は保存後の変更を示します。</p>
+      <p><b>TAPE / WAV：</b>演奏を録音／ループを書き出し。WAV長押しはFX付き。演奏中のFXはTAPEで保存できます。</p>
     </div>
   </details>
-  <script src="audio.js?v=0.2.2" defer></script>
-  <script src="icons.js?v=0.2.2" defer></script>
-  <script src="app.js?v=0.2.2" defer></script>
+  <script src="audio.js?v=0.3.0" defer></script>
+  <script src="icons.js?v=0.3.0" defer></script>
+  <script src="app.js?v=0.3.0" defer></script>
 </body>
 </html>
