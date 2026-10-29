@@ -1,4 +1,4 @@
-/* WRONG NUMBER v0.2.1 — LITTLE WINDOW */
+/* WRONG NUMBER v0.2.2 — WRONG SPEECH / HAPPY ACCIDENTS */
 (()=>{'use strict';
 const A=window.WrongAudio,I=window.WrongIcons; if(!A||!I){document.body.textContent='AUDIO ENGINE FAILED';return;}
 const $=id=>document.getElementById(id), N=32, STORE='wrong-number-session-0.1';
@@ -19,6 +19,29 @@ let dubArmed=false,pendingDub=[],dubUndoSaved=false,dubSessionCount=0,backingGra
 let countInEndAt=0,buildTake=0,streaks=new Map(),accidentUntil=0,accentBunny=1;
 let replyTimer=null,replyCooldown=0,replyCount=0,phraseHits=[];
 let lcdScreen='rabbits';
+let cycleSerial=0,activeAccident=null,fxUntil=0,fxLabel='';
+// One restrained FX gesture every four bars, deterministic for live and offline.
+function chooseAccident(pattern,cycle){
+ if(cycle%2!==1||!pattern.events.length)return null;
+ const viable=pattern.events.filter(e=>e.pad>=4&&e.step>=8);
+ if(!viable.length)return null;
+ const r=A.rng((pattern.seed^Math.imul((cycle+1),0x45d9f3b)^Math.imul(pattern.kit+1,0x9e3779b1))>>>0);
+ const preferred=viable.filter(e=>e.step>=20);
+ const pool=preferred.length?preferred:viable;
+ const event=pool[Math.floor(r()*pool.length)];
+ return {pad:event.pad,step:event.step,velocity:.42,kind:Math.floor(r()*4),seed:(r()*0xffffffff)>>>0};
+}
+function scheduleFx(plan,time,pattern=scene,offGraph=engine,record=true){
+ if(!plan||!offGraph)return;
+ const params={kit:pattern.kit,seed:plan.seed,velocity:plan.velocity,color:{...pattern.color},role:'fx'};
+ A.scheduleAccident(offGraph,plan.pad,time,plan.kind,params,pattern.bpm);
+ if(record&&tape&&time>=tape.startedAt&&time<tape.startedAt+MAX_TAPE_SECONDS)
+  tape.events.push({fx:true,at:time-tape.startedAt,pad:plan.pad,kind:plan.kind,bpm:pattern.bpm,params});
+ if(offGraph===engine){fxLabel=A.ACCIDENT_NAMES[plan.kind];fxUntil=performance.now()+850;
+  accentBunny=(plan.pad+plan.kind)%3;accidentUntil=performance.now()+650;
+  message('FX / '+fxLabel,1);}
+}
+
 
 // The previous session and 16-pad layout remain compatible with v0.1.4.
 let stateAt=()=>live?.currentTime??0;
@@ -40,6 +63,7 @@ function setKit(index){
 const stepSeconds=()=>60/scene.bpm/4,cycleSeconds=()=>N*stepSeconds();
 function displayMode(){
  if(tape)return 'TAPE REC';
+ if(performance.now()<fxUntil)return `FX / ${fxLabel}`;
  if(countInActive())return `READY / ${readyBeats()}`;
  if(performance.now()<glitchUntil)return 'MUTATING';
  if(performance.now()<blankUntil)return 'BLANK / BUILD';
@@ -326,12 +350,12 @@ function captureRecent(){
  if(fromHands.length<4){const background=generateOpen(scene.seed).filter(e=>e.pad<4||e.pad===7).slice(0,5);return balancePattern([...fromHands.map(e=>({...e,origin:'dub'})),...background],16);}
  return balancePattern(fromHands.map(e=>({...e,origin:'dub'})),24);
 }
-function stopLoop(){if(replyTimer){clearTimeout(replyTimer);replyTimer=null;}phraseHits=[];if(dubArmed){commitDub();dubArmed=false;dubUndoSaved=false;}isPlaying=false;countInEndAt=0;buildTake=0;clearInterval(scheduler);scheduler=null;nextStep=0;message('LOOP STOPPED / JAM READY');updateText();}
+function stopLoop(){if(replyTimer){clearTimeout(replyTimer);replyTimer=null;}phraseHits=[];if(dubArmed){commitDub();dubArmed=false;dubUndoSaved=false;}isPlaying=false;countInEndAt=0;buildTake=0;activeAccident=null;cycleSerial=0;clearInterval(scheduler);scheduler=null;nextStep=0;message('LOOP STOPPED / JAM READY');updateText();}
 function startLoop({countIn=false}={}){
  if(!ensureAudio())return;
  if(scene.events.length===0&&scene.groove!=='empty')scene.events=captureRecent();
  if(scheduler)clearInterval(scheduler);
- isPlaying=true;nextStep=countIn?-16:0;nextTick=stateAt()+.08;
+ isPlaying=true;cycleSerial=0;activeAccident=null;nextStep=countIn?-16:0;nextTick=stateAt()+.08;
  countInEndAt=countIn?nextTick+16*stepSeconds():0;
  loopStarted=cycleAnchor=countIn?countInEndAt:nextTick;
  buildTake=0;
@@ -347,7 +371,7 @@ function countClick(time,accent){
 }
 function scheduleAhead(){
  if(!isPlaying||!live||live.state!=='running')return;
- if(nextTick<stateAt()-.40){nextTick=stateAt()+.07;nextStep=0;countInEndAt=0;loopStarted=nextTick;cycleAnchor=nextTick;}
+ if(nextTick<stateAt()-.40){nextTick=stateAt()+.07;nextStep=0;cycleSerial=0;activeAccident=null;countInEndAt=0;loopStarted=nextTick;cycleAnchor=nextTick;}
  let guard=0;
  while(nextTick<stateAt()+.14 && guard++<12){
   const step=nextStep,time=nextTick;
@@ -357,6 +381,7 @@ function scheduleAhead(){
   }
   if(step===0){
    if(pendingDub.length)commitDub();
+   activeAccident=chooseAccident(scene,cycleSerial);
    if(dubArmed&&scene.groove==='empty')buildTake++;
   }
   const stepEvents=scene.events.filter(e=>e.step===step);
@@ -364,9 +389,11 @@ function scheduleAhead(){
    const color={...scene.color,shift:A.clamp(scene.color.shift+(e.expression||0),-2,2)};
    synth(e.pad,time,e.velocity,{seed:(scene.seed^e.variant^e.step)>>>0,color,role:'loop'});
   }
+  if(activeAccident&&step===activeAccident.step&&!countInActive()&&!dubArmed)
+   scheduleFx(activeAccident,time);
   visualBeat=step;
   nextStep=(step+1)%N;nextTick+=stepSeconds();
-  if(nextStep===0)loopStarted=nextTick;
+  if(nextStep===0){loopStarted=nextTick;cycleSerial++;}
  }
 }
 function rememberUndo(){undoStack.push(deepCopy(scene));if(undoStack.length>8)undoStack.shift();}
@@ -528,7 +555,12 @@ function bindControls(){
  m.addEventListener('pointerup',()=>{if(!holdStart)return;const strong=performance.now()-holdStart>=600;holdStart=0;lastPointer=performance.now();mutate(strong);});
  m.addEventListener('pointercancel',()=>{holdStart=0;});
  m.addEventListener('click',()=>{if(performance.now()-lastPointer<500)return;mutate(false);});
- $('btn-export').addEventListener('click',exportWav);
+ const wavButton=$('btn-export');let wavDown=0,wavPointerAt=0;
+ wavButton.addEventListener('contextmenu',e=>e.preventDefault());
+ wavButton.addEventListener('pointerdown',e=>{if(e.pointerType==='mouse'&&e.button!==0)return;wavDown=performance.now();});
+ wavButton.addEventListener('pointerup',()=>{if(!wavDown)return;const withFx=performance.now()-wavDown>=650;wavDown=0;wavPointerAt=performance.now();exportWav(withFx);});
+ wavButton.addEventListener('pointercancel',()=>{wavDown=0;});
+ wavButton.addEventListener('click',()=>{if(performance.now()-wavPointerAt<600)return;exportWav(false);});
  $('btn-close-export').addEventListener('click',()=>{$('export-panel').hidden=true;});
  $('btn-share').addEventListener('click',async()=>{if(!wavFile)return;try{await navigator.share({files:[wavFile],title:'WRONG NUMBER LOOP'});}catch(err){if(err.name!=='AbortError')message('SHARE FAILED / USE DOWNLOAD',3);}});
  const keys='1234qwerasdfzxcv';const held=new Set();
@@ -558,7 +590,7 @@ function completeRender(blob,filename,description){
  message('WAV READY / TAP DOWNLOAD',5);
 }
 function finishRender(){renderBusy=false;$('btn-export').disabled=false;$('btn-tape').disabled=false;}
-async function exportWav(){
+async function exportWav(withFx=false){
  if(renderBusy){message('FINISH EXPORT FIRST',3);return;}
  if(tape){message('STOP TAPE BEFORE LOOP EXPORT',3);return;}
  if(!scene.events.length&&scene.groove==='empty'){message('BLANK / ADD NOTES BEFORE EXPORT',2.5);return;}
@@ -568,18 +600,21 @@ async function exportWav(){
  await new Promise(resolve=>setTimeout(resolve,30));
  try{
   const sampleRate=44100,duration=N*60/snapshot.bpm/4,framesPerCycle=Math.round(duration*sampleRate);
-  const ctx=new (window.OfflineAudioContext||window.webkitOfflineAudioContext)(2,framesPerCycle*3+Math.ceil(sampleRate*.12),sampleRate);
+  const cycleCount=withFx?4:3;
+  const ctx=new (window.OfflineAudioContext||window.webkitOfflineAudioContext)(2,framesPerCycle*cycleCount+Math.ceil(sampleRate*.15),sampleRate);
   const g=A.graph(ctx),stepDuration=60/snapshot.bpm/4,baseline=.035;
   // Use the middle cycle to preserve reverb and delay wrapping over the seam.
-  for(let cycle=0;cycle<3;cycle++){
+  for(let cycle=0;cycle<cycleCount;cycle++){
    for(const ev of snapshot.events){const t=baseline+cycle*duration+ev.step*stepDuration;
     const params={seed:(snapshot.seed^ev.variant^ev.step)>>>0,velocity:ev.velocity,color:snapshot.color,kit:snapshot.kit};
     A.scheduleKitVoice(g,ev.pad,t,{...params,color:{...snapshot.color,shift:A.clamp(snapshot.color.shift+(ev.expression||0),-2,2)}});}
+   if(withFx&&cycle===3){const plan=chooseAccident(snapshot,1);if(plan)
+     scheduleFx(plan,baseline+cycle*duration+plan.step*stepDuration,snapshot,g,false);}
   }
   const rendered=await ctx.startRendering();
-  const start=Math.round((baseline+duration)*sampleRate),end=start+framesPerCycle;
+  const start=Math.round((baseline+(withFx?2:1)*duration)*sampleRate),end=start+framesPerCycle*(withFx?2:1);
   const blob=A.audioBufferToWav(rendered,start,end);
-  completeRender(blob,`wrong-number_${snapshot.bpm}bpm_${snapshot.seed.toString(16).slice(0,6)}.wav`,'TWO BARS');
+  completeRender(blob,`wrong-number_${snapshot.bpm}bpm_${withFx?'fx-4bars':'loop'}_${snapshot.seed.toString(16).slice(0,6)}.wav`,withFx?'FOUR BARS / FX':'TWO BARS / CLEAN');
  }catch(err){console.error(err);$('export-status').textContent='EXPORT FAILED / '+String(err?.message||err).slice(0,90);message('WAV EXPORT FAILED',4);}
  finally{finishRender();}
 }
@@ -618,6 +653,7 @@ async function stopTape(){
   const g=A.graph(ctx),backing={...g,dry:g.backingDry};
   for(const note of notes){
    const at=offset+note.at;
+   if(note.fx){A.scheduleAccident(g,note.pad,at,note.kind,note.params,note.bpm);continue;}
    if(note.params.role==='jam'){
     const gain=g.backingDry.gain;
     // In the offline copy, faithfully reproduce accompaniment ducking.
@@ -817,7 +853,7 @@ function attemptP5(){
  script.onerror=()=>console.info('p5 CDN unavailable; internal Canvas fallback active');
  document.head.appendChild(script);
 }
-function init(){renderPads();bindControls();updateText();startCanvasFallback();attemptP5();if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('./sw.js?v=0.2.1', {updateViaCache:'none'}).catch(err=>console.warn('SW:',err));}
+function init(){renderPads();bindControls();updateText();startCanvasFallback();attemptP5();if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('./sw.js?v=0.2.2', {updateViaCache:'none'}).catch(err=>console.warn('SW:',err));}
 init();
-window.WrongNumberDebug={blank,countInActive,readyBeats,getCountInEnd:()=>countInEndAt,getTake:()=>buildTake,getReplies:()=>replyCount,flashNew,balancePattern,generateOpen,generateFull,getScene:()=>deepCopy(scene),isPlaying:()=>isPlaying,isRecording:()=>!!tape,isDubArmed:()=>dubArmed,pendingDub:()=>deepCopy(pendingDub),setDub,commitDub,snapToStep,cycleAnchor:()=>cycleAnchor,visualState:()=>({blankUntil,newUntil,glitchUntil}),playPad,captureRecent,mutate,fresh,undo,startLoop,stopLoop,startTape,stopTape,exportWav,renderPads,setKit,kitLabel,audioState:()=>({context:live?.state||'none',kit:scene.kit,master:engine?.dry?.gain?.value??null})};
+window.WrongNumberDebug={chooseAccident,scheduleFx,exportWav,cycleSerial:()=>cycleSerial,activeAccident:()=>activeAccident,blank,countInActive,readyBeats,getCountInEnd:()=>countInEndAt,getTake:()=>buildTake,getReplies:()=>replyCount,flashNew,balancePattern,generateOpen,generateFull,getScene:()=>deepCopy(scene),isPlaying:()=>isPlaying,isRecording:()=>!!tape,isDubArmed:()=>dubArmed,pendingDub:()=>deepCopy(pendingDub),setDub,commitDub,snapToStep,cycleAnchor:()=>cycleAnchor,visualState:()=>({blankUntil,newUntil,glitchUntil}),playPad,captureRecent,mutate,fresh,undo,startLoop,stopLoop,startTape,stopTape,exportWav,renderPads,setKit,kitLabel,audioState:()=>({context:live?.state||'none',kit:scene.kit,master:engine?.dry?.gain?.value??null})};
 })();
