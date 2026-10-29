@@ -7,24 +7,24 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="WRONG NUMBER">
-  <meta name="description" content="A tiny haunted candy-colored pocket instrument with five sound kits, live overdubbing and three dancing pixel rabbits.">
+  <meta name="description" content="A tiny haunted candy-colored pocket instrument with six sound kits, synthetic speech and rhythmic surprise effects.">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="apple-touch-icon" href="assets/icon-180.png">
   <link rel="icon" href="assets/icon-192.png">
-  <link rel="stylesheet" href="style.css?v=0.1.9.1">
-  <title>WRONG NUMBER — BLANK BEAT (v0.1.9.1)</title>
+  <link rel="stylesheet" href="style.css?v=0.2.3">
+  <title>WRONG NUMBER — PLAYABILITY REFINEMENT (v0.2.3)</title>
 </head>
 <body>
   <main class="shell" aria-label="WRONG NUMBER pocket instrument">
     <header class="header">
       <div class="brand"><span class="brand-spark" aria-hidden="true">✳</span> WRONG NUMBER <span class="brand-sticker" aria-hidden="true">♡!</span></div>
-      <div class="brand-meta"><span>little accidents / no. 019</span><span class="power-led" aria-hidden="true"></span></div>
+      <div class="brand-meta"><span>little accidents / no. 023</span><span class="power-led" aria-hidden="true"></span></div>
     </header>
 
     <section class="lcd-case" aria-label="Instrument status display">
       <div class="lcd">
         <div class="lcd-top"><span id="lcd-kit">01 / CANDY KIT</span><span id="lcd-mode">READY</span></div>
-        <div class="display-view" id="display-view" aria-label="Three pixel rabbits dancing to the musical state">
+        <div class="display-view" id="display-view" role="button" tabindex="0" aria-label="Dancing rabbits. Tap to see pads 1 to 4." title="Tap to show or hide a 16-step view for pads 01–04">
           <canvas id="display-fallback" width="320" height="100"></canvas>
           <div id="p5-container" aria-hidden="true"></div>
         </div>
@@ -47,7 +47,7 @@
       <button type="button" id="btn-dub" class="command command-dub" aria-pressed="false" aria-label="Start overdub recording" title="Tap to record your live pad performance into the loop"><strong>● DUB</strong><small>OVERDUB</small></button>
     </section>
     <section class="bottom-strip" aria-label="Recording and pattern tools">
-      <button id="btn-undo" class="utility utility-undo" title="Undo the last change">↶ UNDO</button>
+      <button id="btn-undo" class="utility utility-undo" title="Undo last change">↶ UNDO</button>
       <button id="btn-tape" class="utility utility-tape" aria-pressed="false" title="Record up to 30 seconds of live performance">● TAPE</button>
       <button id="btn-new" class="utility utility-new" title="Tap for an open groove, hold for a full groove">✳ NEW</button>
       <button id="btn-export" class="utility utility-export" title="Export two-bar loop">↓ WAV</button>
@@ -59,23 +59,25 @@
       <a id="download-link" href="#" download="wrong-number-loop.wav" hidden>DOWNLOAD WAV</a>
       <button id="btn-share" hidden>SHARE / SAVE TO FILES</button>
     </div>
-    <footer class="footer-line"><span id="live-message">CANDY KIT / READY</span><span>v0.1.9.1 ✳</span></footer>
+    <footer class="footer-line"><span id="live-message">CANDY KIT / READY</span><span>v0.2.3 ✳</span></footer>
   </main>
   <details class="help" lang="ja">
     <summary>使い方</summary>
     <div class="help-content">
       <p><b>はじめに：</b>BLANKでゼロから作るか、NEWでビートを生成。</p>
-      <p><b>PAD：</b>タップで発音。長押しで連打。</p>
-      <p><b>BLANK：</b>空の2小節を再生し、DUBを自動開始。パッドを叩いて入力します。</p>
-      <p><b>DUB：</b>もう一度押すと記録終了。いつでも録音を再開できます。</p>
+      <p><b>PAD：</b>タップで発音。連打すると音が変わり、長押しでリピート。</p>
+      <p><b>BLANK：</b>4拍の合図で録音開始。何周でも重ね録りできます。速いBPMでは96へ調整。長押しで現在のBPMを維持。</p>
+      <p><b>DUB：</b>押すまで重ね録りが続きます。もう一度押して終了。</p>
       <p><b>MUTATE：</b>ビートを変化させます。長押しすると変化が大きくなります。</p>
-      <p><b>UNDO：</b>直前のNEW、BLANK、MUTATE、DUBを取り消します。</p>
-      <p><b>NEW長押し：</b>音数の多いビートを生成。</p>
+      <p><b>UNDO：</b>録音中は直前の音を、通常時は直前の変更を戻します。</p>
+      <p><b>FX：</b>演奏中、ときどき短い音響事故が起こります。録音中は邪魔しません。WAV長押しでFX入り4小節を書き出せます。</p>
+      <p><b>液晶：</b>タップでうさぎと01〜04のビート表示を切り替え。録音中の音も確認できます。</p>
+      <p><b>NEW長押し：</b>音数の多いビートを生成。JAM中は時々小さな返事が鳴ります。</p>
       <p><b>TAPE / WAV：</b>演奏を録音／ループを書き出し。</p>
     </div>
   </details>
-  <script src="audio.js?v=0.1.9.1" defer></script>
-  <script src="icons.js?v=0.1.9.1" defer></script>
-  <script src="app.js?v=0.1.9.1" defer></script>
+  <script src="audio.js?v=0.2.3" defer></script>
+  <script src="icons.js?v=0.2.3" defer></script>
+  <script src="app.js?v=0.2.3" defer></script>
 </body>
 </html>

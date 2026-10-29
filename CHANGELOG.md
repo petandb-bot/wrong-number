@@ -1,16 +1,10 @@
-# v0.1.9.1 — RABBIT FIT
+# v0.2.3 — PLAYABILITY REFINEMENT
 
-- Scaled pixel rabbits to the real LCD dimensions, preventing cropped feet and stretched heads on phones.
-- Removed the unexplained block pixel from the center rabbit and other stray head decorations.
-- Removed the redundant square recording marker inside the rabbit display; recording state is already shown in text.
-- Preserved all sound kits, patterns, buttons and audio paths.
-
-# v0.1.9 — BLANK BEAT
-
-- BLANK: clear pattern, start a silent two-bar clock and arm DUB automatically.
-- Empty scenes never auto-generate notes on LOOP or WAV export.
-- Replaced KEEP with BLANK and RESTORE with one-tap UNDO.
-- NEW confirms every action with a brief lime-green button flash.
-- Redrew the three LCD rabbits as full-body pixel sprites; added occasional falling and reaction poses.
-- Retained all five sound kits, LOOP control behavior, MUTATE, DUB, TAPE and WAV export.
-- Updated PWA resources and retained previous scene storage keys.
+- BAD SPELLINGを長い多音節の疑似発話から、短い単発の合成発声へ刷新。各音色は上昇・下降するピッチと母音フォルマントを持ち、発音の長さは最大約0.22秒（短い子音を含む）。
+- BAD SPELLING 16音の合成音声ノード構成を簡素化。旧版と比較して総生成ノード数を削減。
+- DUBの録音中は未確定ステップも液晶に表示。
+- 録音中のUNDOは直前の未確定打鍵を取り消す。周回単位の確定録音も取り消し可能。
+- UNDO履歴を最大8件までlocalStorageへ保存。BLANKで音がない状態のMUTATEは無変更とし、不要な履歴を作成しない。
+- 高さの限られたスマートフォン画面での余白を少し調整。
+- 既存の6キット、LOOP、BLANK、NEW、MUTATE、TAPE、WAV、液晶アニメーション、FXを維持。
+- テストの絶対パスを廃止し、DUB・UNDOの回帰テストを追加。PWAキャッシュを更新。
