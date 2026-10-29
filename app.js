@@ -1,4 +1,4 @@
-/* WRONG NUMBER v0.2.3 — PLAYABILITY REFINEMENT */
+/* WRONG NUMBER v0.2.4 — REAL ACCIDENTS */
 (()=>{'use strict';
 const A=window.WrongAudio,I=window.WrongIcons; if(!A||!I){document.body.textContent='AUDIO ENGINE FAILED';return;}
 const $=id=>document.getElementById(id), N=32, STORE='wrong-number-session-0.1', HISTORY='wrong-number-undo-0.2.3';
@@ -20,7 +20,28 @@ let countInEndAt=0,buildTake=0,streaks=new Map(),accidentUntil=0,accentBunny=1;
 let replyTimer=null,replyCooldown=0,replyCount=0,phraseHits=[];
 let lcdScreen='rabbits';
 let cycleSerial=0,activeAccident=null,fxUntil=0,fxLabel='';
-// One restrained FX gesture every four bars, deterministic for live and offline.
+let fxMode='SOFT'; // OFF / SOFT / WILD, switched by holding the LCD.
+const fxCache=new Map(),FX_CACHE_LIMIT=10;
+const fxParams=(plan,pattern)=>({kit:pattern.kit,seed:plan.sourceSeed,
+ velocity:plan.velocity,color:{...pattern.color,shift:A.clamp(pattern.color.shift+(plan.expression||0),-2,2)},role:'fx'});
+const fxKey=(pad,params)=>[pad,params.kit,params.seed,params.velocity.toFixed(3),
+ params.color.broken.toFixed(2),params.color.space.toFixed(2),params.color.shift.toFixed(2)].join(':');
+function fxCacheEntry(plan,pattern){
+ if(!plan)return null;
+ const params=fxParams(plan,pattern),key=fxKey(plan.pad,params);
+ return {key,params};
+}
+function prewarmFx(plan,pattern=scene){
+ const item=fxCacheEntry(plan,pattern);if(!item)return Promise.resolve(null);
+ if(fxCache.has(item.key))return fxCache.get(item.key);
+ const promise=A.renderFxSource(plan.pad,item.params).catch(err=>{
+  console.warn('FX prerender skipped:',err);fxCache.delete(item.key);return null;
+ });
+ fxCache.set(item.key,promise);
+ while(fxCache.size>FX_CACHE_LIMIT)fxCache.delete(fxCache.keys().next().value);
+ return promise;
+}
+// One short, constrained replacement every four bars (two 2-bar cycles).
 function chooseAccident(pattern,cycle){
  if(cycle%2!==1||!pattern.events.length)return null;
  const viable=pattern.events.filter(e=>e.pad>=4&&e.step>=8);
@@ -29,17 +50,28 @@ function chooseAccident(pattern,cycle){
  const preferred=viable.filter(e=>e.step>=20);
  const pool=preferred.length?preferred:viable;
  const event=pool[Math.floor(r()*pool.length)];
- return {pad:event.pad,step:event.step,velocity:.42,kind:Math.floor(r()*4),seed:(r()*0xffffffff)>>>0};
+ return {pad:event.pad,step:event.step,velocity:event.velocity,kind:Math.floor(r()*4),
+  seed:(r()*0xffffffff)>>>0,sourceSeed:(pattern.seed^event.variant^event.step)>>>0,
+  variant:event.variant,expression:event.expression||0};
 }
-function scheduleFx(plan,time,pattern=scene,offGraph=engine,record=true){
- if(!plan||!offGraph)return;
- const params={kit:pattern.kit,seed:plan.seed,velocity:plan.velocity,color:{...pattern.color},role:'fx'};
- A.scheduleAccident(offGraph,plan.pad,time,plan.kind,params,pattern.bpm);
+function scheduleFx(plan,time,pattern=scene,offGraph=engine,record=true,readyBuffer=null){
+ if(!plan||!offGraph)return false;
+ const item=fxCacheEntry(plan,pattern);
+ const buffer=readyBuffer||fxReady.get(item.key);
+ if(!buffer)return false; // No fake FX is substituted if the source is still loading.
+ A.scheduleAccident(offGraph,plan.pad,time,plan.kind,item.params,pattern.bpm,buffer);
  if(record&&tape&&time>=tape.startedAt&&time<tape.startedAt+MAX_TAPE_SECONDS)
-  tape.events.push({fx:true,at:time-tape.startedAt,pad:plan.pad,kind:plan.kind,bpm:pattern.bpm,params});
+  tape.events.push({fx:true,at:time-tape.startedAt,pad:plan.pad,kind:plan.kind,bpm:pattern.bpm,params:item.params});
  if(offGraph===engine){fxLabel=A.ACCIDENT_NAMES[plan.kind];fxUntil=performance.now()+850;
   accentBunny=(plan.pad+plan.kind)%3;accidentUntil=performance.now()+650;
   message('FX / '+fxLabel,1);}
+ return true;
+}
+const fxReady=new Map();
+function queueFx(plan,pattern=scene){
+ const item=fxCacheEntry(plan,pattern);if(!item)return;
+ prewarmFx(plan,pattern).then(buffer=>{if(buffer){fxReady.set(item.key,buffer);
+  while(fxReady.size>FX_CACHE_LIMIT)fxReady.delete(fxReady.keys().next().value);}});
 }
 
 
@@ -381,16 +413,24 @@ function scheduleAhead(){
   }
   if(step===0){
    if(pendingDub.length)commitDub();
-   activeAccident=chooseAccident(scene,cycleSerial);
+   activeAccident=fxMode==='OFF'?null:chooseAccident(scene,fxMode==='WILD'?(cycleSerial|1):cycleSerial);
+   // Prime the next four-bar variation well before its first playable step.
+   if(fxMode!=='OFF'&&cycleSerial%2===0)queueFx(chooseAccident(scene,cycleSerial+1),scene);
+   if(activeAccident)queueFx(activeAccident,scene);
    if(dubArmed&&scene.groove==='empty')buildTake++;
   }
   const stepEvents=scene.events.filter(e=>e.step===step);
+  const fxSlot=activeAccident&&step===activeAccident.step&&!countInActive()&&!dubArmed;
+  const fxItem=fxSlot?fxCacheEntry(activeAccident,scene):null;
+  const fxSource=fxItem?fxReady.get(fxItem.key):null;
+  let fxReplaced=false;
   for(const e of stepEvents){
+   if(fxSource&&!fxReplaced&&e.pad===activeAccident.pad&&e.variant===activeAccident.variant){
+    fxReplaced=scheduleFx(activeAccident,time,scene,engine,true,fxSource);if(fxReplaced)continue;
+   }
    const color={...scene.color,shift:A.clamp(scene.color.shift+(e.expression||0),-2,2)};
    synth(e.pad,time,e.velocity,{seed:(scene.seed^e.variant^e.step)>>>0,color,role:'loop'});
   }
-  if(activeAccident&&step===activeAccident.step&&!countInActive()&&!dubArmed)
-   scheduleFx(activeAccident,time);
   visualBeat=step;
   nextStep=(step+1)%N;nextTick+=stepSeconds();
   if(nextStep===0){loopStarted=nextTick;cycleSerial++;}
@@ -497,7 +537,14 @@ function blank(keepTempo=false){
 function tempo(delta){const wasCounting=countInActive();if(dubArmed&&pendingDub.length)commitDub();scene.bpm=A.clamp(scene.bpm+delta,48,180);if(wasCounting)startLoop({countIn:true});else resetPlayhead();persist();message(`${scene.bpm} BPM`,.8);}
 function bindControls(){
  const display=$('display-view');
- display.addEventListener('click',toggleLcd);
+ let lcdDown=0,lcdHandled=0;
+ const changeFxMode=()=>{fxMode=fxMode==='SOFT'?'WILD':fxMode==='WILD'?'OFF':'SOFT';activeAccident=null;
+  message('FX / '+fxMode,1.6);};
+ display.addEventListener('pointerdown',()=>{lcdDown=performance.now();});
+ display.addEventListener('pointerup',()=>{if(lcdDown&&performance.now()-lcdDown>=650){lcdHandled=performance.now();changeFxMode();}lcdDown=0;});
+ display.addEventListener('pointercancel',()=>{lcdDown=0;});
+ display.addEventListener('contextmenu',e=>e.preventDefault());
+ display.addEventListener('click',()=>{if(performance.now()-lcdHandled>650)toggleLcd();});
  display.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleLcd();}});
  $('btn-source').addEventListener('click',()=>setKit(scene.kit+1));
  $('kit-prev').addEventListener('click',()=>setKit(scene.kit-1));
@@ -614,13 +661,17 @@ async function exportWav(withFx=false){
   const cycleCount=withFx?4:3;
   const ctx=new (window.OfflineAudioContext||window.webkitOfflineAudioContext)(2,framesPerCycle*cycleCount+Math.ceil(sampleRate*.15),sampleRate);
   const g=A.graph(ctx),stepDuration=60/snapshot.bpm/4,baseline=.035;
+  const fxPlan=withFx?chooseAccident(snapshot,1):null;
+  const fxBuffer=fxPlan?await prewarmFx(fxPlan,snapshot):null;
   // Use the middle cycle to preserve reverb and delay wrapping over the seam.
   for(let cycle=0;cycle<cycleCount;cycle++){
+   let replaced=false;
    for(const ev of snapshot.events){const t=baseline+cycle*duration+ev.step*stepDuration;
+    if(withFx&&cycle===3&&fxBuffer&&fxPlan&&!replaced&&ev.step===fxPlan.step&&ev.pad===fxPlan.pad&&ev.variant===fxPlan.variant){
+     replaced=scheduleFx(fxPlan,t,snapshot,g,false,fxBuffer);if(replaced)continue;
+    }
     const params={seed:(snapshot.seed^ev.variant^ev.step)>>>0,velocity:ev.velocity,color:snapshot.color,kit:snapshot.kit};
     A.scheduleKitVoice(g,ev.pad,t,{...params,color:{...snapshot.color,shift:A.clamp(snapshot.color.shift+(ev.expression||0),-2,2)}});}
-   if(withFx&&cycle===3){const plan=chooseAccident(snapshot,1);if(plan)
-     scheduleFx(plan,baseline+cycle*duration+plan.step*stepDuration,snapshot,g,false);}
   }
   const rendered=await ctx.startRendering();
   const start=Math.round((baseline+(withFx?2:1)*duration)*sampleRate),end=start+framesPerCycle*(withFx?2:1);
@@ -662,9 +713,15 @@ async function stopTape(){
   const frames=Math.ceil((offset+total)*sampleRate);
   const ctx=new (window.OfflineAudioContext||window.webkitOfflineAudioContext)(2,frames,sampleRate);
   const g=A.graph(ctx),backing={...g,dry:g.backingDry};
+  // TAPE uses exactly the source voice captured for each live FX gesture.
+  const tapeFx=new Map();
+  for(const note of notes.filter(n=>n.fx)){
+   const key=fxKey(note.pad,note.params);
+   if(!tapeFx.has(key))tapeFx.set(key,await A.renderFxSource(note.pad,note.params));
+  }
   for(const note of notes){
    const at=offset+note.at;
-   if(note.fx){A.scheduleAccident(g,note.pad,at,note.kind,note.params,note.bpm);continue;}
+   if(note.fx){A.scheduleAccident(g,note.pad,at,note.kind,note.params,note.bpm,tapeFx.get(fxKey(note.pad,note.params)));continue;}
    if(note.params.role==='jam'){
     const gain=g.backingDry.gain;
     // In the offline copy, faithfully reproduce accompaniment ducking.
@@ -869,7 +926,7 @@ function attemptP5(){
  script.onerror=()=>console.info('p5 CDN unavailable; internal Canvas fallback active');
  document.head.appendChild(script);
 }
-function init(){renderPads();bindControls();updateText();startCanvasFallback();attemptP5();if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('./sw.js?v=0.2.3', {updateViaCache:'none'}).catch(err=>console.warn('SW:',err));}
+function init(){renderPads();bindControls();updateText();startCanvasFallback();attemptP5();if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('./sw.js?v=0.2.4', {updateViaCache:'none'}).catch(err=>console.warn('SW:',err));}
 init();
-window.WrongNumberDebug={getUndoCount:()=>undoStack.length,saveHistory,queueDub,paintSequence,chooseAccident,scheduleFx,exportWav,cycleSerial:()=>cycleSerial,activeAccident:()=>activeAccident,blank,countInActive,readyBeats,getCountInEnd:()=>countInEndAt,getTake:()=>buildTake,getReplies:()=>replyCount,flashNew,balancePattern,generateOpen,generateFull,getScene:()=>deepCopy(scene),isPlaying:()=>isPlaying,isRecording:()=>!!tape,isDubArmed:()=>dubArmed,pendingDub:()=>deepCopy(pendingDub),setDub,commitDub,snapToStep,cycleAnchor:()=>cycleAnchor,visualState:()=>({blankUntil,newUntil,glitchUntil}),playPad,captureRecent,mutate,fresh,undo,startLoop,stopLoop,startTape,stopTape,exportWav,renderPads,setKit,kitLabel,audioState:()=>({context:live?.state||'none',kit:scene.kit,master:engine?.dry?.gain?.value??null})};
+window.WrongNumberDebug={getUndoCount:()=>undoStack.length,saveHistory,queueDub,paintSequence,chooseAccident,scheduleFx,exportWav,cycleSerial:()=>cycleSerial,activeAccident:()=>activeAccident,blank,countInActive,readyBeats,getCountInEnd:()=>countInEndAt,getTake:()=>buildTake,getReplies:()=>replyCount,flashNew,balancePattern,generateOpen,generateFull,getScene:()=>deepCopy(scene),isPlaying:()=>isPlaying,isRecording:()=>!!tape,isDubArmed:()=>dubArmed,pendingDub:()=>deepCopy(pendingDub),setDub,commitDub,snapToStep,cycleAnchor:()=>cycleAnchor,visualState:()=>({blankUntil,newUntil,glitchUntil,fxMode}),playPad,captureRecent,mutate,fresh,undo,startLoop,stopLoop,startTape,stopTape,exportWav,renderPads,setKit,kitLabel,audioState:()=>({context:live?.state||'none',kit:scene.kit,master:engine?.dry?.gain?.value??null})};
 })();

@@ -31,7 +31,9 @@ for(let kit=0;kit<6;kit++){
 let fxNodes=[];
 for(let kind=0;kind<4;kind++){
  const c=new Audio(),g=A.graph(c);
- A.scheduleAccident(g,9,.5,kind,params,108);
+ const source=c.createBuffer(2,16000,16000);source.duration=1;
+ for(let i=0;i<16000;i++){const value=Math.sin(i*.074)*.21;source.getChannelData(0)[i]=value;source.getChannelData(1)[i]=value;}
+ assert(A.scheduleAccident(g,9,.5,kind,params,108,source)?.source==='rendered-pad');
  fxNodes.push(c.count);
  assert(c.count>14,`kind ${kind}`);
 }
@@ -39,4 +41,15 @@ console.log('FX nodes:',fxNodes.join(', '));
 assert(A.scheduleSpeech,'Speech synthesis missing');
 const wav=A.audioBufferToWav(new Audio().createBuffer(2,100,16000),0,100);
 assert(wav.size===44+100*4);
-console.log('PASS',num,'pads + four FX + WAV encoding');
+console.log('PASS',num,'pads + four transformed-source FX + WAV encoding');
+
+// Verify the transformations work on real PCM samples, including channel reversal and crush.
+const src=new Audio().createBuffer(2,16,16);
+for(let i=0;i<16;i++){src.getChannelData(0)[i]=i/16;src.getChannelData(1)[i]=-i/16;}
+const rev=A.sliceBuffer(new Audio(),src,0,.5,{reverse:true});
+assert(Math.abs(rev.getChannelData(0)[0]-.4375)<1e-7);
+assert(Math.abs(rev.getChannelData(1)[0]+.4375)<1e-7);
+const crushed=A.sliceBuffer(new Audio(),src,0,1,{crush:true});
+assert.equal(crushed.getChannelData(0)[3],crushed.getChannelData(0)[0]);
+assert.notEqual(crushed.getChannelData(0)[8],crushed.getChannelData(0)[0]);
+console.log('PASS: stereo reverse and sample-and-hold bitcrush');

@@ -24,7 +24,7 @@ class FakeAudioContext {constructor(){this.sampleRate=22050;this.currentTime=.2;
 
 class FakeOfflineAudioContext extends FakeAudioContext {
  constructor(ch,frames,rate){super();this.sampleRate=rate;this.frames=frames;this.channels=ch;}
- async startRendering(){const arr=Array.from({length:this.channels},()=>new Float32Array(this.frames));return {sampleRate:this.sampleRate,numberOfChannels:this.channels,getChannelData:i=>arr[i]};}
+ async startRendering(){const arr=Array.from({length:this.channels},()=>new Float32Array(this.frames));return {length:this.frames,duration:this.frames/this.sampleRate,sampleRate:this.sampleRate,numberOfChannels:this.channels,getChannelData:i=>arr[i]};}
 }
 const nodes=new Map();function elt(id){if(!nodes.has(id))nodes.set(id,new Element(id));return nodes.get(id)}
 const ids=['btn-source','lcd-kit','lcd-mode','beat-readout','tempo-value','btn-loop','btn-dub','live-message','status-text','pads','kit-prev','kit-next','tempo-down','tempo-up','btn-mutate','btn-blank','btn-undo','btn-tape','btn-new','btn-export','btn-close-export','btn-share','export-panel','export-status','download-link','display-view','display-fallback','p5-container'];ids.forEach(elt);
@@ -99,7 +99,8 @@ console.log('PASS: DUB pending note, per-take UNDO, history persistence');
  const current=D.getScene();
  const fx=D.chooseAccident(current,1);
  assert(fx,'FX candidate must exist for sparse pattern');
- D.scheduleFx(fx,live.currentTime+.13,current,ctx.window.WrongAudio.graph(live),true);
+ const source=await ctx.window.WrongAudio.renderFxSource(fx.pad,{kit:current.kit,seed:fx.sourceSeed,velocity:fx.velocity,color:current.color});
+ assert(D.scheduleFx(fx,live.currentTime+.13,current,ctx.window.WrongAudio.graph(live),true,source));
  live.currentTime+=1.2;
  await D.stopTape();
  assert(elt('download-link').download.includes('tape'));
