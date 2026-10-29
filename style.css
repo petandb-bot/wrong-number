@@ -1,4 +1,4 @@
-/* WRONG NUMBER v0.1.9.1 — RABBIT FIT */
+/* WRONG NUMBER v0.2.0 — PLAY WITH IT */
 :root{font-family:ui-rounded,system-ui,-apple-system,"Arial Rounded MT Bold",sans-serif;color:#30113b;background:#301036;font-synthesis:none;-webkit-text-size-adjust:100%}
 *{box-sizing:border-box}html{min-height:100%;background:#301036}body{margin:0;min-height:100dvh;padding:calc(env(safe-area-inset-top) + 6px) 8px calc(env(safe-area-inset-bottom) + 12px);background:radial-gradient(ellipse at 50% 0%,#6f224f,#2c113b 64%);touch-action:manipulation;overscroll-behavior-y:contain}
 button{font:inherit;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation;user-select:none;-webkit-user-select:none;color:inherit}button:focus-visible,summary:focus-visible,a:focus-visible{outline:3px solid #cbf542;outline-offset:3px}button:disabled{filter:grayscale(.5);opacity:.55;cursor:not-allowed}
@@ -63,3 +63,8 @@ button{font:inherit;cursor:pointer;-webkit-tap-highlight-color:transparent;touch
 /* Crisp mechanical confirmation of a NEW tap; intentionally short-lived. */
 .utility-new.is-new-flash{background:#baff5b;color:#33113b;transform:translateY(2px);box-shadow:inset 2px 2px 0 #ffffffdd,0 1px 0 #82215f;filter:saturate(1.2)}
 .command-blank:active{background:#c0ff6a;transform:translateY(2px)}
+
+/* Readable count-in state without making the device taller. */
+#lcd-mode{min-width:70px;text-align:center}
+.command-blank{touch-action:manipulation;-webkit-touch-callout:none}
+.command-blank>*{pointer-events:none}

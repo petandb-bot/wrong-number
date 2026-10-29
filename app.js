@@ -1,4 +1,4 @@
-/* WRONG NUMBER v0.1.9.1 — RABBIT FIT */
+/* WRONG NUMBER v0.2.0 — PLAY WITH IT */
 (()=>{'use strict';
 const A=window.WrongAudio,I=window.WrongIcons; if(!A||!I){document.body.textContent='AUDIO ENGINE FAILED';return;}
 const $=id=>document.getElementById(id), N=32, STORE='wrong-number-session-0.1';
@@ -9,17 +9,21 @@ const getSaved=k=>{try{return JSON.parse(localStorage.getItem(k));}catch{return 
 const newScene=()=>({bpm:92,seed:randomSeed(),groove:'open',color:{broken:.24,space:.27,shift:0},kit:0,events:[]});
 function validateScene(raw){
  if(!raw||typeof raw!=='object'||!Array.isArray(raw.events))return null;
- return {bpm:A.clamp(Number(raw.bpm)||92,48,180),seed:(raw.seed>>>0)||3,groove:['open','full','classic','empty'].includes(raw.groove)?raw.groove:'classic',kit:A.clamp(Math.floor(Number(raw.kit)||0),0,4),color:{broken:A.clamp(Number(raw.color?.broken)||.18,0,1),space:A.clamp(Number(raw.color?.space)||.25,0,1),shift:A.clamp(Number(raw.color?.shift)||0,-2,2)},events:raw.events.slice(0,64).filter(e=>Number.isInteger(e.step)&&e.step>=0&&e.step<N&&Number.isInteger(e.pad)&&e.pad>=0&&e.pad<16).map(e=>({step:e.step,pad:e.pad,velocity:A.clamp(Number(e.velocity)||.85,.2,1),variant:(e.variant>>>0)||1,origin:e.origin==='dub'?'dub':e.origin==='auto'?'auto':'legacy'}))};
+ return {bpm:A.clamp(Number(raw.bpm)||92,48,180),seed:(raw.seed>>>0)||3,groove:['open','full','classic','empty'].includes(raw.groove)?raw.groove:'classic',kit:A.clamp(Math.floor(Number(raw.kit)||0),0,4),color:{broken:A.clamp(Number(raw.color?.broken)||.18,0,1),space:A.clamp(Number(raw.color?.space)||.25,0,1),shift:A.clamp(Number(raw.color?.shift)||0,-2,2)},events:raw.events.slice(0,64).filter(e=>Number.isInteger(e.step)&&e.step>=0&&e.step<N&&Number.isInteger(e.pad)&&e.pad>=0&&e.pad<16).map(e=>({step:e.step,pad:e.pad,velocity:A.clamp(Number(e.velocity)||.85,.2,1),variant:(e.variant>>>0)||1,origin:e.origin==='dub'?'dub':e.origin==='auto'?'auto':'legacy',expression:A.clamp(Number(e.expression)||0,-1,1)}))};
 }
 let scene=validateScene(getSaved(STORE))||newScene();
 let live=null,engine=null,isPlaying=false,scheduler=null,nextStep=0,nextTick=0,loopStarted=0,cycleAnchor=0,perfCounter=0,lastPadAt=new Map(),recent=[],downPointers=new Map(),pulseUntil=new Array(16).fill(0),lastPad=-1,displayMessage='READY / TOUCH A PAD',messageUntil=0,renderBusy=false,wavUrl=null,wavFile=null,tape=null,tapeClock=null,undoStack=[];
 // JAM is always live and non-destructive. DUB is armed explicitly and stores
 // quantized events for the NEXT pass, never doubling the currently played tap.
 let dubArmed=false,pendingDub=[],dubUndoSaved=false,dubSessionCount=0,backingGraph=null;
+let countInEndAt=0,buildTake=0,streaks=new Map(),accidentUntil=0,accentBunny=1;
+let replyTimer=null,replyCooldown=0,replyCount=0,phraseHits=[];
 
 // The previous session and 16-pad layout remain compatible with v0.1.4.
 let stateAt=()=>live?.currentTime??0;
 let glitchUntil=0,blankUntil=0,newUntil=0,visualBeat=0,newFlashTimer=null;
+const countInActive=()=>isPlaying&&countInEndAt>0&&stateAt()<countInEndAt;
+const readyBeats=()=>Math.max(1,Math.min(4,Math.ceil((countInEndAt-stateAt())/(60/scene.bpm))));
 const kitLabel=()=>A.KIT_TITLES[scene.kit]||A.KIT_TITLES[0];
 function updateKitUi(){
  const name=kitLabel();
@@ -34,20 +38,21 @@ function setKit(index){
 const stepSeconds=()=>60/scene.bpm/4,cycleSeconds=()=>N*stepSeconds();
 function displayMode(){
  if(tape)return 'TAPE REC';
+ if(countInActive())return `READY / ${readyBeats()}`;
  if(performance.now()<glitchUntil)return 'MUTATING';
  if(performance.now()<blankUntil)return 'BLANK / BUILD';
  if(performance.now()<newUntil)return 'NEW BEAT';
- return dubArmed?(scene.groove==='empty'?'BUILD ●':'DUB ●'):isPlaying?(scene.groove==='empty'?'BLANK / LOOP':'JAM / LOOP'):(scene.groove==='empty'?'BLANK / READY':'READY');
+ return dubArmed?(scene.groove==='empty'?`TAKE ${String(Math.max(1,buildTake)).padStart(2,'0')} ●`:'DUB ●'):isPlaying?(scene.groove==='empty'?'BLANK / LOOP':'JAM / LOOP'):(scene.groove==='empty'?'BLANK / READY':'READY');
 }
 function updateText(){
  $('tempo-value').innerHTML=String(scene.bpm).padStart(3,'0')+' <small>BPM</small>';
  $('lcd-mode').textContent=displayMode();
- $('beat-readout').textContent=`${scene.bpm} BPM · ${isPlaying?`${1+Math.floor(visualBeat/16)}:${String(1+Math.floor(visualBeat%16/4)).padStart(2,'0')}`:'--:--'}`;
+ $('beat-readout').textContent=countInActive()?`${scene.bpm} BPM · IN ${readyBeats()}`:`${scene.bpm} BPM · ${isPlaying?`${1+Math.floor(visualBeat/16)}:${String(1+Math.floor(visualBeat%16/4)).padStart(2,'0')}`:'--:--'}`;
  $('btn-loop').setAttribute('aria-pressed',String(isPlaying));
  $('btn-dub').setAttribute('aria-pressed',String(dubArmed));
  $('btn-dub').setAttribute('aria-label',dubArmed?'Stop overdub recording':'Start overdub recording');
  $('btn-dub').querySelector('small').textContent=dubArmed?'● RECORDING':'OVERDUB';
- $('live-message').textContent=`${dubArmed?'● DUB +'+pendingDub.length:isPlaying?'JAM':'READY'} / ${A.KIT_SHORT[scene.kit]} / ${scene.events.length.toString().padStart(2,'0')} HITS / ${scene.groove==='full'?'FULL':scene.groove==='empty'?'BLANK':'SPACE'}`; 
+ $('live-message').textContent=`${countInActive()?'READY '+readyBeats():dubArmed?(scene.groove==='empty'?'● TAKE '+Math.max(1,buildTake):'● DUB +'+pendingDub.length):isPlaying?'JAM':'READY'} / ${A.KIT_SHORT[scene.kit]} / ${scene.events.length.toString().padStart(2,'0')} HITS / ${scene.groove==='full'?'FULL':scene.groove==='empty'?'BLANK':'SPACE'}`; 
  updateKitUi();
 }
 function message(s,seconds=1.7){displayMessage=s;messageUntil=performance.now()+seconds*1000;$('status-text').textContent=s;updateText();}
@@ -114,14 +119,14 @@ function duckBacking(at){
  gain.setTargetAtTime(.56,at,.025);
  gain.setTargetAtTime(1,at+.23,.10);
 }
-function queueDub(pad,velocity,at){
- if(!isPlaying||!dubArmed)return;
+function queueDub(pad,velocity,at,expression=0){
+ if(!isPlaying||!dubArmed||countInActive())return;
  const step=snapToStep(at);
  // Repeated hits on the same pad and grid step should not stack and clip.
  const found=pendingDub.find(e=>family(e.pad)===family(pad)&&circularDistance(e.step,step)<=1);
- if(found){found.pad=pad;found.step=step;found.velocity=Math.max(found.velocity,velocity);updateText();return;}
+ if(found){found.pad=pad;found.step=step;found.velocity=Math.max(found.velocity,velocity);found.expression=expression;updateText();return;}
  if(!dubUndoSaved){rememberUndo();dubUndoSaved=true;}
- pendingDub.push({pad,step,velocity,variant:randomSeed(),origin:'dub'});
+ pendingDub.push({pad,step,velocity,variant:randomSeed(),origin:'dub',expression});
  dubSessionCount++;
  updateText();
 }
@@ -138,30 +143,58 @@ function commitDub(){
 }
 function setDub(armed){
  if(armed){
+  if(replyTimer){clearTimeout(replyTimer);replyTimer=null;}phraseHits=[];
   if(!isPlaying)startLoop();
   if(!isPlaying)return;
   dubArmed=true;dubUndoSaved=false;dubSessionCount=0;
-  message('● DUB / TAP TO RECORD',2);
+  message(countInActive()?'READY / FOUR BEATS':scene.groove==='empty'?'● BUILD / KEEP GOING':'● DUB / TAP TO RECORD',2);
  }else{
   commitDub();
   dubArmed=false;dubUndoSaved=false;
+  if(countInActive())startLoop();
   message(dubSessionCount?`DUB SAVED / +${dubSessionCount} HITS`:'JAM / PLAY FREELY',2);
  }
  updateText();
 }
+// A single quiet reply after a human phrase. It stays out of BLANK / DUB,
+// never writes into the pattern and cannot build up into an auto-generated fill.
+function maybeReply(pad,now){
+ if(!isPlaying||dubArmed||countInActive()||scene.events.length>25)return;
+ phraseHits.push({pad,at:now});
+ phraseHits=phraseHits.filter(e=>now-e.at<1.8).slice(-8);
+ if(replyTimer){clearTimeout(replyTimer);replyTimer=null;}
+ if(phraseHits.length<3||now<replyCooldown)return;
+ const from=phraseHits[phraseHits.length-1].pad;
+ replyTimer=setTimeout(()=>{
+  replyTimer=null;
+  if(!isPlaying||dubArmed||countInActive()||stateAt()-now<.36)return;
+  const candidate=[5,9,4,6][Math.floor(from/4)];
+  const when=stateAt()+.01;
+  synth(candidate,when,.39,{seed:randomSeed(),role:'jam',color:{...scene.color,shift:scene.color.shift-.12}});
+  accentBunny=2;accidentUntil=performance.now()+420;
+  replyCount++;replyCooldown=stateAt()+5;
+  phraseHits=[];
+ },520);
+}
 function playPad(pad,options={}){
  if(!ensureAudio())return;
  const now=stateAt(),last=lastPadAt.get(pad)??-100;
- const rapid=now-last<.25;lastPadAt.set(pad,now);
- const velocity=options.hold?.50:(rapid?.70:.92);
+ const rapid=now-last<.36;lastPadAt.set(pad,now);
+ const previous=streaks.get(pad)||0,streak=rapid?Math.min(5,previous+1):0;
+ streaks.set(pad,streak);
+ const expression=A.clamp(streak*(pad%2?-.14:.16),-.75,.75);
+ const velocity=options.hold?.47:rapid?.78:.92;
+ const liveColor={...scene.color,shift:A.clamp(scene.color.shift+expression,-2,2),broken:A.clamp(scene.color.broken+streak*.055,0,1)};
  duckBacking(now);
- synth(pad,now+.003,velocity,{hold:options.hold,fire:rapid||options.hold,role:'jam'});
+ synth(pad,now+.003,velocity,{hold:options.hold,fire:rapid||options.hold,color:liveColor,role:'jam'});
+ if(streak>=3&&performance.now()>accidentUntil){accentBunny=pad%3;accidentUntil=performance.now()+650;}
  if(!options.hold){
   recent.push({pad,time:now,velocity:rapid?.72:.90,variant:perfCounter});
   recent=recent.filter(e=>e.time>=now-25).slice(-100);
  }
  // DUB records repeats too; JAM always leaves the underlying pattern untouched.
- if(dubArmed)queueDub(pad,options.hold?.53:.88,now);
+ if(dubArmed)queueDub(pad,options.hold?.53:.88,now,expression);
+ else if(!options.hold)maybeReply(pad,now);
  message(dubArmed?`● DUB / ${A.KIT_NAMES[pad]}`:options.hold?`HOLD / ${A.KIT_NAMES[pad]}`:`${String(pad+1).padStart(2,'0')} / ${A.KIT_NAMES[pad]}`,1.1);
 }
 // A rhythmic repeat that follows tempo and timbre instead of a fixed 125ms timer.
@@ -278,30 +311,51 @@ function captureRecent(){
  if(fromHands.length<4){const background=generateOpen(scene.seed).filter(e=>e.pad<4||e.pad===7).slice(0,5);return balancePattern([...fromHands.map(e=>({...e,origin:'dub'})),...background],16);}
  return balancePattern(fromHands.map(e=>({...e,origin:'dub'})),24);
 }
-function stopLoop(){if(dubArmed){commitDub();dubArmed=false;dubUndoSaved=false;}isPlaying=false;clearInterval(scheduler);scheduler=null;nextStep=0;message('LOOP STOPPED / JAM READY');updateText();}
-function startLoop(){
+function stopLoop(){if(replyTimer){clearTimeout(replyTimer);replyTimer=null;}phraseHits=[];if(dubArmed){commitDub();dubArmed=false;dubUndoSaved=false;}isPlaying=false;countInEndAt=0;buildTake=0;clearInterval(scheduler);scheduler=null;nextStep=0;message('LOOP STOPPED / JAM READY');updateText();}
+function startLoop({countIn=false}={}){
  if(!ensureAudio())return;
  if(scene.events.length===0&&scene.groove!=='empty')scene.events=captureRecent();
- isPlaying=true;nextStep=0;nextTick=stateAt()+.08;loopStarted=nextTick;cycleAnchor=nextTick;
- scheduler=setInterval(scheduleAhead,25);scheduleAhead();persist();message('LOOP / 2 BARS');updateText();
+ if(scheduler)clearInterval(scheduler);
+ isPlaying=true;nextStep=countIn?-16:0;nextTick=stateAt()+.08;
+ countInEndAt=countIn?nextTick+16*stepSeconds():0;
+ loopStarted=cycleAnchor=countIn?countInEndAt:nextTick;
+ buildTake=0;
+ scheduler=setInterval(scheduleAhead,25);scheduleAhead();persist();message(countIn?'READY / FOUR BEATS':'LOOP / 2 BARS');updateText();
+}
+function countClick(time,accent){
+ if(!engine||!live)return;
+ const o=live.createOscillator(),g=live.createGain();
+ o.type='triangle';o.frequency.setValueAtTime(accent?1150:820,time);
+ g.gain.setValueAtTime(.0001,time);g.gain.exponentialRampToValueAtTime(accent?.09:.055,time+.002);
+ g.gain.exponentialRampToValueAtTime(.0001,time+.045);
+ o.connect(g);g.connect(engine.dry);o.start(time);o.stop(time+.05);
 }
 function scheduleAhead(){
  if(!isPlaying||!live||live.state!=='running')return;
- if(nextTick<stateAt()-.40){nextTick=stateAt()+.07;nextStep=0;loopStarted=nextTick;cycleAnchor=nextTick;}
+ if(nextTick<stateAt()-.40){nextTick=stateAt()+.07;nextStep=0;countInEndAt=0;loopStarted=nextTick;cycleAnchor=nextTick;}
  let guard=0;
  while(nextTick<stateAt()+.14 && guard++<12){
-  // At the next loop boundary, DUB notes become audible as part of the pattern.
-  if(nextStep===0&&pendingDub.length)commitDub();
   const step=nextStep,time=nextTick;
+  if(step<0){
+   if(step%4===0)countClick(time,step===-16);
+   nextStep=step+1;nextTick+=stepSeconds();continue;
+  }
+  if(step===0){
+   if(pendingDub.length)commitDub();
+   if(dubArmed&&scene.groove==='empty')buildTake++;
+  }
   const stepEvents=scene.events.filter(e=>e.step===step);
-  for(const e of stepEvents){synth(e.pad,time,e.velocity,{seed:(scene.seed^e.variant^e.step)>>>0,color:scene.color,role:'loop'});}
-  visualBeat=step; $('beat-readout').textContent=`${scene.bpm} BPM · ${1+Math.floor(step/16)}:${String(1+Math.floor(step%16/4)).padStart(2,'0')}`;
+  for(const e of stepEvents){
+   const color={...scene.color,shift:A.clamp(scene.color.shift+(e.expression||0),-2,2)};
+   synth(e.pad,time,e.velocity,{seed:(scene.seed^e.variant^e.step)>>>0,color,role:'loop'});
+  }
+  visualBeat=step;
   nextStep=(step+1)%N;nextTick+=stepSeconds();
   if(nextStep===0)loopStarted=nextTick;
  }
 }
 function rememberUndo(){undoStack.push(deepCopy(scene));if(undoStack.length>8)undoStack.shift();}
-function resetPlayhead(){if(isPlaying){nextStep=0;nextTick=stateAt()+.07;loopStarted=nextTick;cycleAnchor=nextTick;}}
+function resetPlayhead(){if(isPlaying){nextStep=0;nextTick=stateAt()+.07;loopStarted=nextTick;cycleAnchor=nextTick;countInEndAt=0;}}
 function undo(){
  if(dubArmed){pendingDub=[];dubArmed=false;dubUndoSaved=false;}
  if(!undoStack.length){message('NO EARLIER MUTATION');return;}
@@ -354,7 +408,7 @@ function mutate(strong=false){
  scene.color.broken=A.clamp(scene.color.broken+(r()-.5)*(strong?.38:.14),.07,.85);
  scene.color.space=A.clamp(scene.color.space+(r()-.5)*(strong?.24:.10),.06,.80);
  scene.color.shift=A.clamp(scene.color.shift+(r()-.5)*(strong?1.1:.42),-1.6,1.6);
- glitchUntil=performance.now()+(strong?1200:720);
+ glitchUntil=performance.now()+(strong?1200:720);accentBunny=(Math.floor(Math.random()*3));accidentUntil=performance.now()+950;
  persist();
  if(!isPlaying)startLoop();
  message(`${strong?'WILD':'MUTATE'} / ${original.length}→${scene.events.length} HITS`,1.8);
@@ -371,21 +425,23 @@ function fresh(full=false){
  if(dubArmed)setDub(false);
  rememberUndo();scene={...newScene(),bpm:scene.bpm,kit:scene.kit,groove:full?'full':'open'};
  scene.events=generate(scene.seed,full);newUntil=performance.now()+1000;
- flashNew();resetPlayhead();persist();message(full?'FULL BEAT / LISTEN':'SPACE BEAT / YOUR TURN',2);
+ flashNew();accentBunny=(Math.floor(Math.random()*3));accidentUntil=performance.now()+760;resetPlayhead();persist();message(full?'FULL BEAT / LISTEN':'SPACE BEAT / YOUR TURN',2);
 }
-function blank(){
+function blank(keepTempo=false){
+ if(replyTimer){clearTimeout(replyTimer);replyTimer=null;}phraseHits=[];
  if(renderBusy){message('FINISH EXPORT FIRST',2);return;}
+ if(dubArmed)commitDub();
  rememberUndo();
- // BLANK clears the musical pattern but keeps the chosen kit and tempo.
- scene={...newScene(),bpm:scene.bpm,kit:scene.kit,groove:'empty',events:[]};
- recent=[];pendingDub=[];dubArmed=false;dubUndoSaved=false;dubSessionCount=0;
+ const bpm=!keepTempo&&scene.bpm>110?96:scene.bpm;
+ scene={...newScene(),bpm,kit:scene.kit,groove:'empty',events:[]};
+ recent=[];pendingDub=[];dubArmed=true;dubUndoSaved=false;dubSessionCount=0;
  blankUntil=performance.now()+1400;
- if(isPlaying)resetPlayhead();else startLoop();
- if(!isPlaying){message('AUDIO / TAP BLANK AGAIN',3);persist();return;}
- setDub(true);persist();message('BLANK / TAP PADS TO BUILD',2.4);
+ accentBunny=1;accidentUntil=performance.now()+800;
+ startLoop({countIn:true});
+ persist();message(bpm===96&&!keepTempo?'BLANK / 96 BPM / FOUR BEATS':'BLANK / FOUR BEATS',2.4);
 }
 
-function tempo(delta){if(dubArmed)setDub(false);scene.bpm=A.clamp(scene.bpm+delta,48,180);resetPlayhead();persist();message(`${scene.bpm} BPM`,.8);}
+function tempo(delta){const wasCounting=countInActive();if(dubArmed&&pendingDub.length)commitDub();scene.bpm=A.clamp(scene.bpm+delta,48,180);if(wasCounting)startLoop({countIn:true});else resetPlayhead();persist();message(`${scene.bpm} BPM`,.8);}
 function bindControls(){
  $('btn-source').addEventListener('click',()=>setKit(scene.kit+1));
  $('kit-prev').addEventListener('click',()=>setKit(scene.kit-1));
@@ -430,7 +486,13 @@ function bindControls(){
   setDub(!dubArmed);
  });
  $('tempo-down').addEventListener('click',()=>tempo(-2));$('tempo-up').addEventListener('click',()=>tempo(2));
- $('btn-blank').addEventListener('click',blank);
+ // Short BLANK uses a gentle practice tempo; hold to retain the current BPM.
+ const blankButton=$('btn-blank');let blankDown=0,lastBlankPointer=0;
+ blankButton.addEventListener('contextmenu',e=>e.preventDefault());
+ blankButton.addEventListener('pointerdown',e=>{if(e.pointerType==='mouse'&&e.button!==0)return;blankDown=performance.now();});
+ blankButton.addEventListener('pointerup',()=>{if(!blankDown)return;const hold=performance.now()-blankDown>=650;blankDown=0;lastBlankPointer=performance.now();blank(hold);});
+ blankButton.addEventListener('pointercancel',()=>{blankDown=0;});
+ blankButton.addEventListener('click',()=>{if(performance.now()-lastBlankPointer<650)return;blank(false);});
  // Short NEW = playable space; deliberate long hold = busy full demo groove.
  const newButton=$('btn-new');let newDown=0,lastNewPointer=0;
  newButton.addEventListener('contextmenu',e=>e.preventDefault());
@@ -494,7 +556,7 @@ async function exportWav(){
   for(let cycle=0;cycle<3;cycle++){
    for(const ev of snapshot.events){const t=baseline+cycle*duration+ev.step*stepDuration;
     const params={seed:(snapshot.seed^ev.variant^ev.step)>>>0,velocity:ev.velocity,color:snapshot.color,kit:snapshot.kit};
-    A.scheduleKitVoice(g,ev.pad,t,params);}
+    A.scheduleKitVoice(g,ev.pad,t,{...params,color:{...snapshot.color,shift:A.clamp(snapshot.color.shift+(ev.expression||0),-2,2)}});}
   }
   const rendered=await ctx.startRendering();
   const start=Math.round((baseline+duration)*sampleRate),end=start+framesPerCycle;
@@ -558,65 +620,91 @@ async function stopTape(){
 function paint(ctx,w,h){
  const now=performance.now();
  // Align visual pose transitions to the AudioContext clock while LOOP runs.
- const beat=isPlaying?Math.floor(Math.max(0,(stateAt()-cycleAnchor)/stepSeconds())/2):Math.floor(now/640);
+ const beat=isPlaying?Math.floor(Math.max(0,(stateAt()-(countInActive()?countInEndAt:cycleAnchor))/stepSeconds())/2):Math.floor(now/640);
  const glitch=now<glitchUntil,building=now<blankUntil,brandNew=now<newUntil;
  const hit=pulseUntil.some(x=>x>now),mode=displayMode();
  if($('lcd-mode').textContent!==mode)$('lcd-mode').textContent=mode;
- if(now>messageUntil){const neutral=tape?'TAPE / RECORDING':dubArmed?`● OVERDUB / ${pendingDub.length} QUEUED`:isPlaying?'JAM / PLAY ALONG':'TAP TO PLAY';if($('status-text').textContent!==neutral)$('status-text').textContent=neutral;}
+ if(countInActive())$('beat-readout').textContent=`${scene.bpm} BPM · IN ${readyBeats()}`;
+ else if(isPlaying)$('beat-readout').textContent=`${scene.bpm} BPM · ${1+Math.floor(visualBeat/16)}:${String(1+Math.floor(visualBeat%16/4)).padStart(2,'0')}`;
+ if(now>messageUntil){const neutral=tape?'TAPE / RECORDING':countInActive()?`GET READY / ${readyBeats()} BEATS`:dubArmed&&scene.groove==='empty'?`TAKE ${Math.max(1,buildTake)} / KEEP PLAYING`:dubArmed?`● OVERDUB / ${pendingDub.length} QUEUED`:isPlaying?'JAM / PLAY ALONG':'TAP TO PLAY';if($('status-text').textContent!==neutral)$('status-text').textContent=neutral;}
  const dark='#2a4930',light='#b9eb90',inner='#8bbc66',medium='#668a4b';
  ctx.imageSmoothingEnabled=false;ctx.clearRect(0,0,w,h);ctx.fillStyle=light;ctx.fillRect(0,0,w,h);
  // Dot paper texture remains stationary; no waveform or oscillogram.
  ctx.globalAlpha=.11;ctx.fillStyle=medium;
  for(let x=7;x<w;x+=9)for(let y=5;y<h;y+=9)ctx.fillRect(x,y,1,1);
  ctx.globalAlpha=1;
- // Whole-body 8-bit rabbits: broad cheeks, tiny torsos, dancing feet and paws.
- // Use the *displayed* canvas dimensions and one uniform pixel scale.
- // Reserve space above both ears and below both feet, including the hop pose.
- const scale=Math.max(.8,Math.min((h-18)/43,(w-42)/(3*27+2*30)));
+ // Three full-body LCD sprites on a tiny moving stage. No image assets.
+ const scale=Math.max(.75,Math.min((h-9)/50,(w-32)/(3*27+2*24)));
+ const floorY=Math.round(h-4);
+ const pix=(x,y,ww,hh,color=dark)=>{ctx.fillStyle=color;ctx.fillRect(Math.round(x),Math.round(y),Math.max(1,Math.round(ww)),Math.max(1,Math.round(hh)));};
+ // Each rabbit has its own four-step comic dance, not a synchronized head wobble.
  function bunny(n,pose,accident=false){
-  const sx=w*(.2+.3*n)-13.5*scale;
-  const sy=(h-38*scale)/2;
-  const step=pose%4,hop=step===1||step===3;
-  // Everything is placed in sprite pixels, including the legs; no bottom clipping.
-  ctx.save();ctx.translate(Math.round(sx),Math.round(sy+(hop?-2:0)*scale));
-  // A small sideways stumble remains inside the LCD; the old 90° rotation did not.
-  if(accident){ctx.translate(13*scale,23*scale);ctx.rotate(n%2?-.25:.25);ctx.translate(-13*scale,-23*scale);}
-  const p=(x,y,w,h,col=dark)=>rectLocal(x,y,w,h,col);
-  const rectLocal=(x,y,w,h,col)=>{ctx.fillStyle=col;ctx.fillRect(Math.round(x*scale),Math.round(y*scale),Math.round(w*scale),Math.round(h*scale));};
-  const sway=step===3?1:step===1?-1:0;
-  // Ears with individual tilts; one rabbit can suddenly lose its straight ear.
-  p(5,0,5,11);p(17,0,5,11);
-  p(6,2,2,7,inner);p(18,2,2,7,inner);
-  if(step===2){p(4,2,3,2);p(20,2,3,2);}
-  // Square-round head silhouette and light LCD face.
-  p(4,8,19,2);p(2,10,23,3);p(1,13,25,10);p(3,23,21,3);p(6,26,15,2);
-  p(4,12,19,11,light);p(6,10,15,3,light);p(6,23,15,3,light);
-  p(2,18,2,3,inner);p(23,18,2,3,inner);
-  // Bouncy cheek shape; black eyes can blink and occasionally turn into Xs.
-  const blink=Math.floor(now/240+7*n)%29===0;
-  const freak=glitch&&(n+beat)%3===0;
-  if(freak){p(7,16,4,1);p(8,15,2,3);p(17,16,4,1);p(18,15,2,3);p(12,19,3,3);}
-  else if(blink){p(7,19,3,1);p(17,19,3,1);}
-  else {p(8,16,2,3);p(17,16,2,3);p(8,16,1,1,light);p(17,16,1,1,light);}
-  p(12,19,3,2);p(11,22,2,1);p(15,22,2,1);
-  p(5,21,3,1,inner);p(19,21,3,1,inner);
-  // Little body, separate arms, rounded belly, visible knees and feet.
-  p(8+sway,27,11,8);p(10+sway,29,7,5,light);
-  if(step===1){p(4+sway,27,5,2);p(18+sway,25,6,2);}
-  else if(step===3){p(4+sway,25,6,2);p(18+sway,27,5,2);}
-  else {p(5+sway,29,4,4);p(18+sway,29,4,4);}
-  p(7+sway,35,5,3);p(16+sway,35,5,3);
-  if(step===2){p(6+sway,35,5,3);p(17+sway,33,5,3);}
-  p(21+sway,31,3,3); // Tail.
+  const step=((pose%4)+4)%4,hop=step===1||step===3;
+  const left=w*(.19+n*.31)-13.5*scale;
+  const base=(h-46*scale)/2+(hop?-2.5:0)*scale;
+  const glide=step===1?-1.7:step===3?1.7:0;
+  ctx.save();
+  ctx.translate(Math.round(left+glide*scale),Math.round(base));
+  if(accident){ctx.translate(14*scale,32*scale);ctx.rotate(n===1?-.45:.42);ctx.translate(-14*scale,-32*scale);}
+  const p=(x,y,ww,hh,color=dark)=>pix(x*scale,y*scale,ww*scale,hh*scale,color);
+  // Two highly legible ears, a large face, and a distinctly separate little body.
+  p(5,1,5,11);p(17,0,5,12);
+  p(7,3,2,7,inner);p(19,2,2,8,inner);
+  if(step===2)p(3,4,4,2); // Wiggling ear tip.
+  p(5,9,17,2);p(3,11,21,3);p(2,14,23,11);p(4,25,19,3);p(7,28,13,2);
+  p(5,13,17,11,light);p(6,11,15,3,light);p(6,24,15,3,light);
+  p(2,21,2,2,inner);p(23,21,2,2,inner);
+  const blink=(Math.floor(now/200)+n*7)%31===0;
+  const surprised=(glitch||accident)&&n===accentBunny;
+  if(surprised){p(7,17,3,4);p(17,17,3,4);p(12,23,3,3);}
+  else if(blink){p(7,20,3,1);p(17,20,3,1);p(12,22,3,2);}
+  else {p(8,18,2,3);p(17,18,2,3);p(8,18,1,1,light);p(17,18,1,1,light);p(12,22,3,2);p(11,25,2,1);p(15,25,2,1);}
+  p(5,23,3,1,inner);p(19,23,3,1,inner);
+  // Rounded torso / small contrasting belly / lively independent hands.
+  p(7,29,13,11);p(9,31,9,8,light);
+  if(step===0){p(3,32,5,4);p(19,32,5,4);}
+  if(step===1){p(2,28,6,3);p(20,31,6,3);}
+  if(step===2){p(3,33,5,4);p(19,28,6,3);}
+  if(step===3){p(3,30,5,3);p(19,26,5,3);}
+  // Two short legs and feet that genuinely hop and alternate.
+  if(step===2){p(7,39,5,5);p(16,38,5,4);p(6,43,7,3);p(16,41,7,3);}
+  else {p(7,39,5,4);p(16,39,5,4);p(5,42,8,3);p(16,42,8,3);}
+  p(21,34,3,3); // Round tail.
   ctx.restore();
  }
  const cycleStep=isPlaying?((Math.floor((stateAt()-cycleAnchor)/stepSeconds())%N+N)%N):0;
  const cycles=isPlaying?Math.floor(Math.max(0,stateAt()-cycleAnchor)/cycleSeconds()):0;
- // Rare, deterministic missteps: the third bunny trips for one 16th-note at the end of every fourth cycle.
- const trip=isPlaying&&cycles%4===3&&cycleStep>=27&&cycleStep<=31;
+ const trip=isPlaying&&cycles%5===4&&cycleStep>=27&&cycleStep<=30;
+ const accidental=now<accidentUntil;
+ // A miniature light-up dance floor creates a group scene without a waveform.
+ for(let n=0;n<3;n++){
+  const x=w*(.19+n*.31),dance=(beat+n)%4;
+  pix(x-16*scale,floorY-1,32*scale,1,medium);
+  for(let k=0;k<3;k++){
+   const lit=(dance+k)%3===0;
+   pix(x+(k-1)*10*scale-2*scale,floorY-4,4*scale,2,lit?dark:inner);
+  }
+ }
  for(let n=0;n<3;n++){
   const pose=building?(beat+n)%4:glitch?(beat+n*2)%4:brandNew?(beat+3-n)%4:(beat+n)%4;
-  bunny(n,pose,(trip&&n===1)||(glitch&&n===(beat%3)&&cycleStep%8===0));
+  const stumble=(trip&&n===1)||(accidental&&n===accentBunny)||(glitch&&n===beat%3&&cycleStep%8===0);
+  bunny(n,pose,stumble);
+ }
+ // Comic 'accidents': stars pop OUTSIDE the characters and disappear quickly.
+ const sparkle=(x,y)=>{pix(x-1,y,3,1,dark);pix(x,y-1,1,3,dark);pix(x+3,y-2,2,2,medium);};
+ const flick=Math.floor(now/160)%4;
+ if(isPlaying||hit||building||brandNew){
+  sparkle(w*.345,h*.30+(flick%2)*3);
+  if(flick===1||flick===3)sparkle(w*.67,h*.22);
+ }
+ if(accidental||glitch||trip){
+  const x=w*(.19+accentBunny*.31)+22*scale,y=h*.20;
+  sparkle(x,y);sparkle(x+7,y+6);
+ }
+ // All-dancing mode: an occasional tiny 'question mark' appears on the side.
+ if(isPlaying&&cycles%3===2&&cycleStep>=11&&cycleStep<=14){
+  pix(w*.95,h*.27,3,2);pix(w*.95+2,h*.27+2,2,3);
+  pix(w*.95,h*.27+6,2,2);
  }
  // Small stepped indicators mark the current quarter-note and kit only.
  for(let i=0;i<8;i++){
@@ -677,7 +765,7 @@ function attemptP5(){
  script.onerror=()=>console.info('p5 CDN unavailable; internal Canvas fallback active');
  document.head.appendChild(script);
 }
-function init(){renderPads();bindControls();updateText();startCanvasFallback();attemptP5();if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('./sw.js?v=0.1.9.1', {updateViaCache:'none'}).catch(err=>console.warn('SW:',err));}
+function init(){renderPads();bindControls();updateText();startCanvasFallback();attemptP5();if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('./sw.js?v=0.2.0', {updateViaCache:'none'}).catch(err=>console.warn('SW:',err));}
 init();
-window.WrongNumberDebug={blank,flashNew,balancePattern,generateOpen,generateFull,getScene:()=>deepCopy(scene),isPlaying:()=>isPlaying,isRecording:()=>!!tape,isDubArmed:()=>dubArmed,pendingDub:()=>deepCopy(pendingDub),setDub,commitDub,snapToStep,cycleAnchor:()=>cycleAnchor,visualState:()=>({blankUntil,newUntil,glitchUntil}),playPad,captureRecent,mutate,fresh,undo,startLoop,stopLoop,startTape,stopTape,exportWav,renderPads,setKit,kitLabel,audioState:()=>({context:live?.state||'none',kit:scene.kit,master:engine?.dry?.gain?.value??null})};
+window.WrongNumberDebug={blank,countInActive,readyBeats,getCountInEnd:()=>countInEndAt,getTake:()=>buildTake,getReplies:()=>replyCount,flashNew,balancePattern,generateOpen,generateFull,getScene:()=>deepCopy(scene),isPlaying:()=>isPlaying,isRecording:()=>!!tape,isDubArmed:()=>dubArmed,pendingDub:()=>deepCopy(pendingDub),setDub,commitDub,snapToStep,cycleAnchor:()=>cycleAnchor,visualState:()=>({blankUntil,newUntil,glitchUntil}),playPad,captureRecent,mutate,fresh,undo,startLoop,stopLoop,startTape,stopTape,exportWav,renderPads,setKit,kitLabel,audioState:()=>({context:live?.state||'none',kit:scene.kit,master:engine?.dry?.gain?.value??null})};
 })();

@@ -1,16 +1,9 @@
-# v0.1.9.1 — RABBIT FIT
+# v0.2.0 — PLAY WITH IT
 
-- Scaled pixel rabbits to the real LCD dimensions, preventing cropped feet and stretched heads on phones.
-- Removed the unexplained block pixel from the center rabbit and other stray head decorations.
-- Removed the redundant square recording marker inside the rabbit display; recording state is already shown in text.
-- Preserved all sound kits, patterns, buttons and audio paths.
-
-# v0.1.9 — BLANK BEAT
-
-- BLANK: clear pattern, start a silent two-bar clock and arm DUB automatically.
-- Empty scenes never auto-generate notes on LOOP or WAV export.
-- Replaced KEEP with BLANK and RESTORE with one-tap UNDO.
-- NEW confirms every action with a brief lime-green button flash.
-- Redrew the three LCD rabbits as full-body pixel sprites; added occasional falling and reaction poses.
-- Retained all five sound kits, LOOP control behavior, MUTATE, DUB, TAPE and WAV export.
-- Updated PWA resources and retained previous scene storage keys.
+- BLANKに4拍カウントインを追加。2小節は録音の制限時間ではなくループの長さ。DUB終了まで何周でも記録。
+- BPMが111以上なら、BLANK短押し時のみ96 BPMへ。長押しでテンポ維持。
+- 液晶にREADYカウントとTAKE番号を表示。
+- 同一パッドの連打で音色が少しずつ変化し、DUB/WAVで録音した変化も保持。
+- JAM中に3打以上の短いフレーズを弾くと、混み合わない範囲で小さな応答を返す。
+- うさぎ3匹の全身アニメーションに独立したステップ、足元の演出、短いアクシデントを追加。
+- 5キット、NEW/LOOP/MUTATE/UNDO/TAPE/WAVとPWAの基本仕様は維持。
