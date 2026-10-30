@@ -113,7 +113,7 @@ function audioBufferToWav(buffer,startFrame,endFrame){
    offline render paths; nothing is streamed, sampled or downloaded. */
 const KIT_TITLES=['CANDY KIT','TOY MALFUNCTION','SUGAR POISON','ROTTEN CARROT','WORM PARADE','BAD SPELLING'];
 const KIT_SHORT=['CANDY','TOY','SUGAR','CARROT','WORMS','SPELL'];
-const KIT_PAD_NAMES=[null,null,null,null,null,['AH','UU','EH','OH','IH','YAH','WAH','EH?','BA','BU','BE','BO','YEE','WEE','UH-OH','NO']];
+const KIT_PAD_NAMES=[null,null,null,null,null,['AH!','UH','EH↑','OH?','IH','WU','YEH','MM','BA!','BU','BE?','BO','WEE','YOW','EHK','NO!']];
 function scheduleKitVoice(g,pad,time,params={}){
  const kit=clamp(Math.floor(Number(params.kit)||0),0,KIT_TITLES.length-1);
  if(kit===0)return scheduleVoice(g,pad,time,params);
@@ -235,60 +235,98 @@ function scheduleKitVoice(g,pad,time,params={}){
 }
 
 
-// Short single-vowel toy speech: no long words, long tails, or overlapping syllables.
-const VOWELS={
- A:[820,1380,2800],E:[490,2070,2850],I:[300,2500,3200],
- O:[510,950,2500],U:[350,1080,2350],Y:[580,1750,2850]
-};
-// vowel, fundamental, glide in semitones, duration, onset consonant, brightness
-const PHONEMES=[
- ['A',158, 3,.18,'',1], ['U',125,-5,.22,'',.8], ['E',168, 5,.24,'',1], ['O',138,-3,.21,'',.9],
- ['I',190, 1,.16,'',.9], ['A',220, 5,.18,'y',1], ['A',150,-4,.23,'w',.7], ['E',165, 7,.23,'',1],
- ['A',145,-2,.20,'b',.9], ['U',136,-4,.20,'b',.8], ['E',187, 3,.19,'b',1], ['O',158,-3,.22,'b',.75],
- ['I',218, 6,.19,'y',1], ['I',205,-5,.25,'w',.8], ['U',124, 7,.26,'',.6], ['O',145,-6,.23,'n',.75]
+// BAD SPELLING: short speech-chip one-shots. Each pad has one articulation;
+// neither a long spoken word nor a transient drum voice.
+const SPEECH_TABLE=[
+ // vowel, Hz, pitch bend in semitones, seconds, attack type, brightness, grit
+ ['A',135, 4,.185,'v',.91,.20], ['U',105,-6,.205,'v',.81,.40],
+ ['E',170, 7,.185,'v',1.00,.20], ['O',124,-3,.195,'v',.80,.42],
+ ['I',197, 2,.130,'s',.96,.45], ['U',154, 4,.145,'w',.86,.37],
+ ['E',173,-4,.155,'y',.99,.34], ['M',112, 2,.190,'n',.68,.18],
+ ['A',150,-5,.150,'b',.94,.34], ['U',129, 5,.155,'b',.82,.38],
+ ['E',185, 6,.165,'b',1.00,.22],['O',141,-5,.165,'b',.84,.40],
+ ['I',228, 5,.140,'w',1.01,.23],['A',190,-7,.175,'y',.95,.46],
+ ['E',143,-8,.120,'k',1.02,.62],['O',106,-6,.180,'n',.72,.36]
 ];
+const SPEECH_FORMANTS={
+ A:[800,1370,2730],U:[360,1180,2300],E:[515,1920,2720],
+ I:[315,2380,3120],O:[505,920,2500],M:[260,1030,2100]
+};
+const speechBank=new WeakMap();
+function makeSpeechBuffer(ctx,id){
+ let bank=speechBank.get(ctx);
+ if(!bank){bank=new Map();speechBank.set(ctx,bank);}
+ if(bank.has(id))return bank.get(id);
+ const [vowel,base,bend,duration,onset,brightness,grit]=SPEECH_TABLE[id];
+ const sr=ctx.sampleRate,n=Math.ceil((duration+.015)*sr);
+ const buf=ctx.createBuffer(1,n,sr),data=buf.getChannelData(0);
+ const dest=SPEECH_FORMANTS[vowel],r=rng(0x9e3779b9^Math.imul(id+1,2673));
+ // A deterministic glottal pulse feeds three resonances. The periodic excitation
+ // and quantized pitch changes give it cheap speech-synth character.
+ const poles=dest.map((f,i)=>{
+  const bw=[115,175,260][i],decay=Math.exp(-Math.PI*bw/sr);
+  return {a:2*decay*Math.cos(2*Math.PI*f/sr),b:decay*decay,g:[.75,.59,.35][i]*brightness,y1:0,y2:0};
+ });
+ let phase=0,hold=0,peak=0;
+ for(let i=0;i<n;i++){
+  const t=i/sr,u=t/duration;
+  if(u>=1){data[i]=0;continue;}
+  // Fourteen-millisecond pitch steps, like an inexpensive phoneme ROM.
+  const stair=Math.floor(t/.014),fraction=Math.min(1,stair*.014/duration);
+  const semis=bend*(fraction<.6?fraction*.72:fraction*1.2-.288);
+  const f0=base*Math.pow(2,semis/12)*(1+.007*Math.sin(stair*1.91));
+  phase+=f0/sr;
+  if(phase>=1)phase-=1;
+  // Glottal pulses have several harmonics, with a small alternating buzz.
+  const glottal=(phase<.18?Math.sin(Math.PI*phase/.18):0)-.1146;
+  let excite=glottal*.68+.035*Math.sin(phase*Math.PI*2);
+  // A softened consonant transition, not a second percussive event.
+  if(t<.021){
+   if(onset==='s'||onset==='k')excite+=(r()*2-1)*.22*(1-t/.021);
+   if(onset==='b')excite*=.24+.76*t/.021;
+   if(onset==='w'||onset==='y')excite*=.50+.50*t/.021;
+   if(onset==='n')excite*=.75;
+  }
+  let sample=0;
+  for(let j=0;j<3;j++){
+   const q=poles[j];
+   // Light phoneme onset / release movement gives a single vowel some articulation.
+   const transition=t<.032?(t/.032):1;
+   const x=excite*(.40+.60*transition);
+   const y=x+q.a*q.y1-q.b*q.y2;
+   q.y2=q.y1;q.y1=y;
+   sample+=y*q.g;
+  }
+  const attack=Math.min(1,t/.008),release=Math.min(1,(duration-t)/.029);
+  const shaped=sample*attack*release*(.83+.17*Math.sin(Math.PI*u));
+  // Digital stepping is restrained: audible texture without harsh clipping.
+  if(i%2===0)hold=Math.round(shaped*(140-grit*65))/(140-grit*65);
+  data[i]=hold;
+  peak=Math.max(peak,Math.abs(hold));
+ }
+ // Each pad is level-matched while preserving stronger/weaker articulation.
+ const scale=Math.min(4.0,.52/Math.max(.001,peak));
+ for(let i=0;i<n;i++)data[i]*=scale;
+ bank.set(id,buf);
+ return buf;
+}
 function scheduleSpeech(g,pad,time,params={}){
- const c=g.ctx,id=clamp(pad|0,0,15),t=Math.max(.001,time);
- const color=params.color||{},broken=clamp(color.broken??.24,0,1);
- const seed=((params.seed||1)^Math.imul(id+37,0x45d9f3b))>>>0,r=rng(seed);
- const [vowel,base,glide,duration,consonant,brightness]=PHONEMES[id];
- const vel=clamp(params.velocity??.85,.2,1.1)*(params.hold?.72:1);
- const pitch=Math.pow(2,clamp(color.shift||0,-2,2)/12);
- const dur=Math.min(.215,duration)+(params.fire?-.025:0),end=t+dur;
- // Intentionally short dry source so 16th-note sequences remain articulated.
- const out=bus(g,t,vel*.72,.035+clamp(color.space??.25,0,1)*.04,.008);
- const tone=c.createBiquadFilter();tone.type='lowpass';tone.frequency.value=3100+broken*700;tone.Q.value=.48;tone.connect(out);
- const carrier=c.createOscillator(),thin=c.createOscillator(),blend=c.createGain(),env=c.createGain();
- carrier.type='sawtooth';thin.type='square';blend.gain.value=.22;
- const startF=base*pitch*(.995+r()*.01),endF=startF*Math.pow(2,(glide+((r()-.5)*broken*1.2))/12);
- carrier.frequency.setValueAtTime(startF,t);carrier.frequency.linearRampToValueAtTime(endF,t+dur*.84);
- thin.frequency.setValueAtTime(startF*.997,t);thin.frequency.linearRampToValueAtTime(endF*.998,t+dur*.84);
- carrier.connect(blend);thin.connect(blend);
- const frequencies=VOWELS[vowel];
- for(let i=0;i<3;i++){
-  const filter=c.createBiquadFilter(),level=c.createGain();
-  filter.type='bandpass';filter.Q.value=[4.4,5.8,7.0][i];
-  filter.frequency.setValueAtTime(frequencies[i]*(.99+r()*.02),t);
-  filter.frequency.linearRampToValueAtTime(frequencies[i]*(1+(glide>0?.055:-.04)+broken*.025),t+dur*.76);
-  level.gain.value=[.91,.58,.33][i]*brightness;
-  blend.connect(filter);filter.connect(level);level.connect(env);
- }
- const attack=consonant?.017:.022,release=Math.min(.065,dur*.26);
+ const ctx=g.ctx,id=clamp(pad|0,0,15),t=Math.max(.001,time);
+ const color=params.color||{},vel=clamp(params.velocity??.85,.18,1.1)*(params.hold?.76:1);
+ const source=ctx.createBufferSource(),out=bus(g,t,vel*.67,.008,0);
+ const env=ctx.createGain(),filter=ctx.createBiquadFilter(),[vowel,base,bend,dur,onset,bright,grit]=SPEECH_TABLE[id];
+ source.buffer=makeSpeechBuffer(ctx,id);
+ filter.type='lowpass';filter.frequency.value=clamp(3600+(color.broken??.24)*900,1700,5600);
+ filter.Q.value=.35;
+ const shift=clamp((color.shift||0)*1.4+(params.fire?.35:0),-5,5);
+ source.playbackRate.value=Math.pow(2,shift/12);
  env.gain.setValueAtTime(.0001,t);
- env.gain.linearRampToValueAtTime(.72,t+attack);
- env.gain.setValueAtTime(.72,t+dur-release);
+ env.gain.linearRampToValueAtTime(1,t+.004);
+ const end=t+(source.buffer.length/source.buffer.sampleRate)/source.playbackRate.value;
+ env.gain.setValueAtTime(1,Math.max(t+.008,end-.013));
  env.gain.linearRampToValueAtTime(.0001,end);
- env.connect(tone);
- carrier.start(t);thin.start(t);carrier.stop(end+.012);thin.stop(end+.012);
- // Very short consonant onset, never a second syllable or a drum-like hit.
- if(consonant==='b'||consonant==='n'){
-  noise(g,tone,t,{d:.009,a:.022,lp:1600,offset:r()});
- }else if(consonant==='y'||consonant==='w'){
-  const lead=c.createOscillator(),e=c.createGain();lead.type='triangle';
-  lead.frequency.setValueAtTime(startF*.7,t);lead.frequency.linearRampToValueAtTime(startF,t+.035);
-  e.gain.setValueAtTime(.0001,t);e.gain.linearRampToValueAtTime(.06,t+.012);e.gain.linearRampToValueAtTime(.0001,t+.038);
-  lead.connect(e);e.connect(tone);lead.start(t);lead.stop(t+.045);
- }
+ source.connect(filter);filter.connect(env);env.connect(out);
+ source.start(t);source.stop(end+.002);
  return out;
 }
 

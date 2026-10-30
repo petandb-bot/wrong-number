@@ -21,7 +21,7 @@ with sync_playwright() as p:
         assert dimensions['scrollWidth']<=width+1, f'horizontal overflow {dimensions}'
         assert not errors,errors
         if width==390:
-            path=base/'WRONG_NUMBER_v0.3.0_390x740.png'
+            path=base/'WRONG_NUMBER_v0.3.1_390x740.png'
             page.screenshot(path=str(path),full_page=True)
             page.locator('#display-view').click()
             assert page.locator('#lcd-mode').inner_text()=='PADS 01-04'

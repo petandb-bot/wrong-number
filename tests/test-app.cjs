@@ -43,7 +43,7 @@ for(let group=0;group<4;group++)elt('display-view').dispatch('keydown',{key:'Ent
 assert.strictEqual(D.lcdScreen(),'rabbits');
 D.setKit(5);
 assert.strictEqual(D.getScene().kit,5);
-assert.strictEqual(elt('pads').children[0].label.textContent,'AH');
+assert.strictEqual(elt('pads').children[0].label.textContent,'AH!');
 D.fresh(false);
 const ev=D.getScene().events;
 assert(ev.length>=10&&ev.length<=16,`NEW sparse ${ev.length}`);
@@ -103,10 +103,10 @@ assert.strictEqual(D.getSelectedSlot(),0);
 assert(Array.isArray(JSON.parse(store.get('wrong-number-slots-0.3'))));
 D.startLoop();D.loadSlot(1);
 assert.strictEqual(D.getQueuedSlot(),1);
-D.stopLoop();D.applySlot(1);
+D.stopLoop();assert.strictEqual(D.getQueuedSlot(),-1,'STOP must cancel a queued pattern change');D.applySlot(1);
 assert.strictEqual(D.getScene().kit,4);
 D.prewarmGesture(4);
-console.log('PASS 0.3.0: five LCD states, three pattern memories, queued recall, gesture FX preload');
+console.log('PASS 0.3.1: five LCD states, three pattern memories, queued recall, gesture FX preload');
 
 (async()=>{
  D.fresh(false);const scene=D.getScene();

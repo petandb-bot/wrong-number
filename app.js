@@ -1,4 +1,4 @@
-/* WRONG NUMBER v0.3.0 — LITTLE PERFORMANCE MACHINE */
+/* WRONG NUMBER v0.3.1 — SHORT CIRCUITS / stability review */
 (()=>{'use strict';
 const A=window.WrongAudio,I=window.WrongIcons; if(!A||!I){document.body.textContent='AUDIO ENGINE FAILED';return;}
 const $=id=>document.getElementById(id), N=32, STORE='wrong-number-session-0.1', HISTORY='wrong-number-undo-0.2.3', SLOTS='wrong-number-slots-0.3';
@@ -459,7 +459,7 @@ function captureRecent(){
  if(fromHands.length<4){const background=generateOpen(scene.seed).filter(e=>e.pad<4||e.pad===7).slice(0,5);return balancePattern([...fromHands.map(e=>({...e,origin:'dub'})),...background],16);}
  return balancePattern(fromHands.map(e=>({...e,origin:'dub'})),24);
 }
-function stopLoop(){if(replyTimer){clearTimeout(replyTimer);replyTimer=null;}phraseHits=[];if(dubArmed){commitDub();dubArmed=false;dubUndoSaved=false;}isPlaying=false;countInEndAt=0;buildTake=0;activeAccident=null;cycleSerial=0;clearInterval(scheduler);scheduler=null;nextStep=0;message('LOOP STOPPED / JAM READY');updateText();}
+function stopLoop(){if(replyTimer){clearTimeout(replyTimer);replyTimer=null;}phraseHits=[];if(dubArmed){commitDub();dubArmed=false;dubUndoSaved=false;}isPlaying=false;countInEndAt=0;buildTake=0;activeAccident=null;cycleSerial=0;queuedSlot=-1;clearInterval(scheduler);scheduler=null;nextStep=0;message('LOOP STOPPED / JAM READY');updateText();}
 function startLoop({countIn=false}={}){
  if(!ensureAudio())return;
  if(scene.events.length===0&&scene.groove!=='empty')scene.events=captureRecent();
@@ -682,7 +682,7 @@ function bindControls(){
    if(long)saveSlot(i);else loadSlot(i);
   });
   b.addEventListener('pointercancel',()=>{down=0;b.classList.remove('is-touching');});
-  b.addEventListener('click',()=>{if(performance.now()-lastPointer>600)loadSlot(i);});
+  b.addEventListener('click',event=>{if(event.detail!==0&&performance.now()-lastPointer<900)return;loadSlot(i);});
  });
  $('tempo-down').addEventListener('click',()=>tempo(-2));$('tempo-up').addEventListener('click',()=>tempo(2));
  // Short BLANK uses a gentle practice tempo; hold to retain the current BPM.

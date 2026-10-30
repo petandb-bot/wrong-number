@@ -1,38 +1,26 @@
-# WRONG NUMBER v0.3.0 — LITTLE PERFORMANCE MACHINE
+# WRONG NUMBER v0.3.1 — SHORT CIRCUITS
 
-p5.js + Web Audio API によるスマートフォン向けポケット楽器。GitHub Pagesにそのまま配置できます。
+スマートフォンで演奏する小さな電子楽器。p5.js + Web Audio API、GitHub Pages向け。
 
-## 操作
+## 使い方
 
-- **PAD**：タップで発音。連打と長押しで音程・質感が変化し、ときどき発音自体が短く加工されます。
-- **NEW**：余白のあるループを生成。長押しで密度の高いループ。
-- **BLANK**：カウントイン後、自分のパッド演奏を何周でも記録。長押しで元のBPMを維持。
-- **LOOP / DUB**：再生と重ね録り。**MUTATE / UNDO**：変形と取り消し。
-- **液晶**：タップで「うさぎ → 01–04 → 05–08 → 09–12 → 13–16 → うさぎ」。長押しで自動FXのOFF / SOFT / WILD切替。
-- **MEM A/B/C**：空枠はタップで保存。保存済み枠はタップで読込、長押しで上書き。読込は再生中なら次の2小節の先頭で反映。`*` は保存後の変更、`•` は保存済み。
-- **TAPE / WAV**：即興演奏の録音 / ループ出力。WAV長押しでFX入り4小節。
+- **PAD**：叩く／連打／長押しで音が変わる。
+- **NEW**：ビートを生成。長押しで密度の高いビート。
+- **BLANK**：4拍カウント後に自由に録音。何周でも重ね録り。
+- **LOOP / DUB**：再生・停止／録音のON・OFF。
+- **MUTATE / UNDO**：変形／取り消し。
+- **液晶**：タップでうさぎと4組のステップ表示を切替。長押しでFXの頻度を切替。
+- **MEM A/B/C**：空枠タップで保存。保存済みタップで呼び出し。長押しで上書き。
+- **TAPE / WAV**：演奏録音／ループ書き出し。WAV長押しでFX付き4小節。
 
-## 演奏FXの仕様
-
-連打や長押しで短い STUTTER / REVERSE / TAPE BEND / CRUSH が起こります。初回の打鍵は即時発音を優先し、変化用の音片は必要になったときだけ内部生成します。利用できない場合は通常の音色変化へフォールバックします。
-
-DUBは演奏したパッドと打鍵位置・音色変化を記録します。**その場だけのジェスチャーFXそのものはDUBパターンに固定されません**。FXを含むライブ演奏はTAPEで保存してください。自動FXの頻度設定と演奏FXは独立しています。
+BAD SPELLINGは短い音声チップ風の16発声です。ほかの5キットの音源は変更していません。
 
 ## 公開
 
-このフォルダの内容をGitHubリポジトリのルートに配置し、**Settings → Pages → Deploy from a branch → main → /(root)** を選択してください。スマートフォンのSafariで公開URLを開いてホーム画面に追加できます。
+ZIP内の `index.html`, `app.js`, `audio.js`, `style.css`, `icons.js`, `sw.js`, `manifest.webmanifest`, `assets/` をリポジトリ直下に配置。GitHubで **Settings → Pages → Deploy from a branch → main → /(root)** を有効化。iPhone Safariからホーム画面へ追加できます。
 
-録音素材は使用しません。A/B/Cの保存枠とUNDOは端末のブラウザストレージに保存され、GitHubには送信されません。ブラウザデータを消去すると失われます。
+上書き時はフォルダの中身を配置してください。古い表示が残る場合はSafariのページを再読込し、ホーム画面アプリを再起動してください。
 
-## ファイル
+## テストと制限
 
-- `index.html`, `style.css`: 操作画面
-- `app.js`: ループ、パッド操作、状態管理、液晶、パターン記憶
-- `audio.js`: 6キット96音、音声加工、WAV出力
-- `icons.js`: 統一したパッドアイコン
-- `sw.js`, `manifest.webmanifest`, `assets/`: ホーム画面/PWA
-- `tests/`: Node.js音声・操作テスト、Chromiumでの画面検証
-
-## 検証と制約
-
-Node.jsの模擬オーディオテスト、Chromiumでの実音レンダリング、390×740等の表示、パターン操作、WAV/TAPE出力を確認しています。iPhone Safari実機では未検証です。音声処理の仕様上、音質やタッチ遅延は端末性能によって変わります。
+`node tests/test-audio.cjs`, `node tests/test-app.cjs`、Playwright/Chromiumで動作確認。`tests/speech_signal_review.py` は16音の数値検査。iPhone Safari実機では未検証です。A/B/CとUNDOはブラウザ保存であり、ブラウザデータ消去時に失われます。DUBは打鍵位置・音色変化を保存しますが、即興FX自体は固定せず、TAPEで録音します。
