@@ -1,4 +1,4 @@
-/* WRONG NUMBER v0.3.4 — PLAYABLE CORE / full maintenance */
+/* WRONG NUMBER v0.3.5 — PLAYABLE CORE / full maintenance */
 (()=>{'use strict';
 const A=window.WrongAudio,I=window.WrongIcons; if(!A||!I){document.body.textContent='AUDIO ENGINE FAILED';return;}
 const $=id=>document.getElementById(id), N=32, STORE='wrong-number-session-0.1', HISTORY='wrong-number-undo-0.2.3', SLOTS='wrong-number-slots-0.3';
@@ -775,7 +775,7 @@ async function exportWav(withFx=false){
     if(withFx&&cycle===3&&fxBuffer&&fxPlan&&!replaced&&ev.step===fxPlan.step&&ev.pad===fxPlan.pad&&ev.variant===fxPlan.variant){
      replaced=scheduleFx(fxPlan,t,snapshot,g,false,fxBuffer);if(replaced)continue;
     }
-    const params={seed:(snapshot.seed^ev.variant^ev.step)>>>0,velocity:ev.velocity,color:snapshot.color,kit:snapshot.kit};
+    const params={seed:(snapshot.seed^ev.variant^ev.step)>>>0,velocity:ev.velocity,color:snapshot.color,kit:snapshot.kit,role:'loop'};
     A.scheduleKitVoice(g,ev.pad,t,{...params,color:{...snapshot.color,shift:A.clamp(snapshot.color.shift+(ev.expression||0),-2,2)}});}
   }
   const rendered=await ctx.startRendering();
@@ -1050,7 +1050,7 @@ function attemptP5(){
  script.onerror=()=>console.info('p5 CDN unavailable; internal Canvas fallback active');
  document.head.appendChild(script);
 }
-function init(){renderPads();bindControls();updateSlots();updateText();startCanvasFallback();attemptP5();if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('./sw.js?v=0.3.4', {updateViaCache:'none'}).catch(err=>console.warn('SW:',err));}
+function init(){renderPads();bindControls();updateSlots();updateText();startCanvasFallback();attemptP5();if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('./sw.js?v=0.3.5', {updateViaCache:'none'}).catch(err=>console.warn('SW:',err));}
 init();
 window.WrongNumberDebug={getTapeEventKinds:()=>tape?tape.events.map(e=>e.fx?'fx':e.params?.role||'note'):[],getSlots:()=>deepCopy(savedSlots),getSelectedSlot:()=>selectedSlot,getQueuedSlot:()=>queuedSlot,saveSlot,loadSlot,applySlot,gestureSpec,prewarmGesture,performGestureFx,stepGroup:()=>stepGroup,lcdScreen:()=>lcdScreen,toggleLcd,getUndoCount:()=>undoStack.length,saveHistory,queueDub,paintSequence,chooseAccident,scheduleFx,exportWav,cycleSerial:()=>cycleSerial,activeAccident:()=>activeAccident,blank,countInActive,readyBeats,getCountInEnd:()=>countInEndAt,getTake:()=>buildTake,getReplies:()=>replyCount,flashNew,balancePattern,generateOpen,generateFull,getScene:()=>deepCopy(scene),isPlaying:()=>isPlaying,isRecording:()=>!!tape,isDubArmed:()=>dubArmed,pendingDub:()=>deepCopy(pendingDub),setDub,commitDub,snapToStep,cycleAnchor:()=>cycleAnchor,visualState:()=>({blankUntil,newUntil,glitchUntil,fxMode}),playPad,captureRecent,mutate,fresh,undo,startLoop,stopLoop,startTape,stopTape,exportWav,renderPads,setKit,kitLabel,audioState:()=>({context:live?.state||'none',kit:scene.kit,master:engine?.dry?.gain?.value??null})};
 })();

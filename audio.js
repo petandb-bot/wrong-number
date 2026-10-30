@@ -1,4 +1,4 @@
-/* WRONG NUMBER audio engine v0.3.4 — procedural instruments and real one-shot FX. */
+/* WRONG NUMBER audio engine v0.3.5 — calibrated voices, controlled peaks and smoother FX. */
 (()=>{'use strict';
 const TAU=Math.PI*2, clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
 function rng(seed){let a=seed>>>0;return ()=>{a+=0x6D2B79F5;let t=a;t=Math.imul(t^(t>>>15),t|1);t^=t+Math.imul(t^(t>>>7),t|61);return((t^(t>>>14))>>>0)/4294967296;};}
@@ -7,13 +7,31 @@ function makeNoise(ctx){
  for(let i=0;i<frames;i++){state^=state<<13;state^=state>>>17;state^=state<<5;data[i]=((state>>>0)/2147483648-1)*.82;}return b;
 }
 function makeImpulse(ctx){const len=Math.round(ctx.sampleRate*1.35),b=ctx.createBuffer(2,len,ctx.sampleRate);for(let ch=0;ch<2;ch++){const a=b.getChannelData(ch),r=rng(911+ch*17);for(let i=0;i<len;i++){const t=i/ctx.sampleRate;const density=Math.pow(1-t/1.35,2.7);a[i]=(r()*2-1)*density*.19;}}return b;}
+// Shared signal path for live playback and offline export. The EQ manages
+// sub-bass buildup and high-frequency fatigue; a short safety stage prevents
+// coincident pad/FX transients from exceeding the PCM ceiling.
 function graph(ctx){
  const dry=ctx.createGain();dry.gain.value=.77;
  const backingDry=ctx.createGain();backingDry.gain.value=1;backingDry.connect(dry);
+ const subCut=ctx.createBiquadFilter();subCut.type='highpass';subCut.frequency.value=29;subCut.Q.value=.707;
+ const lowShelf=ctx.createBiquadFilter();lowShelf.type='lowshelf';lowShelf.frequency.value=185;lowShelf.gain.value=-1.5;
+ const treble=ctx.createBiquadFilter();treble.type='highshelf';treble.frequency.value=4000;treble.gain.value=-3.0;
  const compressor=ctx.createDynamicsCompressor();compressor.threshold.value=-14;compressor.knee.value=15;compressor.ratio.value=3;compressor.attack.value=.005;compressor.release.value=.18;
- const output=ctx.createGain();output.gain.value=.87;dry.connect(compressor);compressor.connect(output);output.connect(ctx.destination);
- const reverbIn=ctx.createGain(),convolver=ctx.createConvolver(),reverbOut=ctx.createGain();convolver.buffer=makeImpulse(ctx);reverbOut.gain.value=.42;reverbIn.connect(convolver);convolver.connect(reverbOut);reverbOut.connect(compressor);
- const delayIn=ctx.createGain(),delay=ctx.createDelay(1),tone=ctx.createBiquadFilter(),fb=ctx.createGain(),delayOut=ctx.createGain();delay.delayTime.value=.294;tone.type='lowpass';tone.frequency.value=2700;fb.gain.value=.27;delayOut.gain.value=.28;delayIn.connect(delay);delay.connect(tone);tone.connect(fb);fb.connect(delay);tone.connect(delayOut);delayOut.connect(compressor);
+ const safety=ctx.createWaveShaper();const curve=new Float32Array(4097);
+ for(let i=0;i<curve.length;i++){
+  const x=i/2048-1,a=Math.abs(x);
+  curve[i]=Math.sign(x)*(a<=.70?a:.70+.22*(1-Math.exp(-(a-.70)/.22)));
+ }
+ safety.curve=curve;safety.oversample='2x';
+ const output=ctx.createGain();output.gain.value=.89;
+ dry.connect(subCut);subCut.connect(lowShelf);lowShelf.connect(treble);
+ treble.connect(compressor);compressor.connect(safety);safety.connect(output);output.connect(ctx.destination);
+ const reverbIn=ctx.createGain(),convolver=ctx.createConvolver(),reverbOut=ctx.createGain();
+ convolver.buffer=makeImpulse(ctx);reverbOut.gain.value=.32;
+ reverbIn.connect(convolver);convolver.connect(reverbOut);reverbOut.connect(subCut);
+ const delayIn=ctx.createGain(),delay=ctx.createDelay(1),tone=ctx.createBiquadFilter(),fb=ctx.createGain(),delayOut=ctx.createGain();
+ delay.delayTime.value=.294;tone.type='lowpass';tone.frequency.value=2400;fb.gain.value=.23;delayOut.gain.value=.22;
+ delayIn.connect(delay);delay.connect(tone);tone.connect(fb);fb.connect(delay);tone.connect(delayOut);delayOut.connect(subCut);
  return {ctx,dry,backingDry,reverbIn,delayIn,noise:makeNoise(ctx)};
 }
 function bus(g,time,level,space=.12,echo=.1){const ctx=g.ctx,b=ctx.createGain(),send=ctx.createGain(),ed=ctx.createGain();b.gain.value=level;b.connect(g.dry);send.gain.value=space;ed.gain.value=echo;b.connect(send);b.connect(ed);send.connect(g.reverbIn);ed.connect(g.delayIn);return b;}
@@ -39,12 +57,32 @@ function fm(g,out,time,{f=160,m=3,index=90,d=.22,a=.23,attack=.003,drop=1}={}){
  carrier.type='sine';mod.type='sine';carrier.frequency.setValueAtTime(f,time);carrier.frequency.exponentialRampToValueAtTime(Math.max(28,f*drop),time+d*.72);mod.frequency.value=f*m;depth.gain.setValueAtTime(index,time);depth.gain.exponentialRampToValueAtTime(.01,time+d);mod.connect(depth);depth.connect(carrier.frequency);
  adsr(amp.gain,time,a,d,attack);carrier.connect(amp);amp.connect(out);carrier.start(time);mod.start(time);carrier.stop(time+d+.02);mod.stop(time+d+.02);
 }
+// Conservative relative balances: percussion transients retain dynamics, while
+// very long low notes and piercing special hits are kept behind the player's lead.
+const PAD_LEVELS=[
+ [.96,.73,.98,.96,1.02,1.06,1.02,1.00,1.18,1.00,1.04,1.06,.98,.88,.98,.86],
+ [.97,.83,.96,.96,.99,1.04,1.00,1.01,.95,1.00,.90,.95,.98,.88,.97,.88],
+ [.96,.75,.96,.94,1.02,1.02,.95,1.00,.88,.92,.86,.92,1.00,.80,.94,.83],
+ [.97,.83,.98,.93,1.03,1.01,1.03,.98,1.00,.99,.88,.91,.99,.82,.96,.86],
+ [.97,.90,.95,.95,1.01,1.00,1.00,.99,.97,.95,.91,.93,.98,.88,.96,.87],
+ [.69,.68,.70,.68,.69,.70,.67,.69,.68,.68,.68,.67,.68,.68,.70,.68]
+];
+const padGain=(kit,pad)=>PAD_LEVELS[Math.max(0,Math.min(5,kit|0))][Math.max(0,Math.min(15,pad|0))];
+// Machine-generated patterns leave room for the next note. The full tails
+// remain available in live pad performance, so this is not a global gate.
+function tameLoopTail(voice,t,role,pad){
+ if(role!=='loop'||!(pad===1||pad>=13))return;
+ const cutoff=pad===1?.48:.61,level=voice.gain.value;
+ voice.gain.setValueAtTime(level,t);
+ voice.gain.setValueAtTime(level,t+cutoff*.66);
+ voice.gain.linearRampToValueAtTime(.0001,t+cutoff);
+}
 function scheduleVoice(g,pad,time,params={}){
  const seed=params.seed??1,id=(pad|0),r=rng((seed^((id+1)*2654435761))>>>0),color=params.color||{broken:.2,space:.3,shift:0};
  const vel=clamp(params.velocity??.85,.14,1.25),hold=params.hold||false,fire=params.fire||false;
  const transpose=clamp((color.shift||0)*2+((fire?r()-.5:0)*5),-8,8),pitch=Math.pow(2,transpose/12);
  const broken=clamp(color.broken??.2,0,1),space=clamp(color.space??.3,0,1);
- const tonal=1+(r()-.5)*(.018+broken*.12),v=vel*(hold?.67:1),t=Math.max(.001,time),voice=bus(g,t,v*.74,.10+space*.2,.03+space*.15),u=()=>r();
+ const tonal=1+(r()-.5)*(.018+broken*.12),v=vel*(hold?.67:1),t=Math.max(.001,time),voice=bus(g,t,v*.74*padGain(0,id),.075+space*.15,.024+space*.10),u=()=>r();
  switch(id){
   case 0: // Deep pressure kick, pitch decay and little beater
    oscillator(g,voice,t,{f:149*pitch,endF:46*pitch,d:.42,a:.49,type:'sine',attack:.002});
@@ -96,6 +134,7 @@ function scheduleVoice(g,pad,time,params={}){
   case 15: // Suspended, cold harmonic cloud
    [110,164.8,247.8,333].forEach((f,i)=>oscillator(g,voice,t+i*.015,{f:f*pitch*(1+(u()-.5)*.019),d:.81+i*.075,a:.063,attack:.055+i*.012,type:i===1?'triangle':'sine'}));break;
  }
+ tameLoopTail(voice,t,params.role,id);
  return voice;
 }
 function audioBufferToWav(buffer,startFrame,endFrame){
@@ -105,7 +144,7 @@ function audioBufferToWav(buffer,startFrame,endFrame){
  u8('RIFF');u32(36+n*4);u8('WAVE');u8('fmt ');u32(16);u16(1);u16(2);u32(sampleRate);u32(sampleRate*4);u16(4);u16(16);u8('data');u32(n*4);
  const left=buffer.getChannelData(0),right=buffer.numberOfChannels>1?buffer.getChannelData(1):left;
  let peak=0;for(let i=startFrame;i<endFrame;i++){peak=Math.max(peak,Math.abs(left[i]),Math.abs(right[i]));}
- const gain=peak>0.00001?Math.min(2.3,.891/peak):1;
+ const gain=peak>.90?.90/peak:1;
  for(let i=startFrame;i<endFrame;i++){let l=clamp(left[i]*gain,-1,1),r=clamp(right[i]*gain,-1,1);view.setInt16(pos,l<0?l*32768:l*32767,true);pos+=2;view.setInt16(pos,r<0?r*32768:r*32767,true);pos+=2;}
  return new Blob([ab],{type:'audio/wav'});
 }
@@ -123,7 +162,9 @@ function scheduleKitVoice(g,pad,time,params={}){
  const broken=clamp(color.broken??.24,0,1),space=clamp(color.space??.26,0,1);
  const trans=clamp((color.shift||0)*1.7+(fire?rand()-.5:0)*4,-7,7);
  const p=Math.pow(2,trans/12),vol=clamp(params.velocity??.85,.18,1.1)*(hold?.70:1);
- const v=bus(g,t,vol*(kit===3?.77:kit===4?.68:kit===5?.79:.73),kit===2?.24+space*.25:kit===3?.09+space*.17:kit===4?.15+space*.18:kit===5?.12+space*.20:.07+space*.13,kit===1?.035:kit===2?.14:kit===3?.075:kit===5?.092:.06);
+ const v=bus(g,t,vol*padGain(kit,id)*(kit===3?.77:kit===4?.68:.73),
+  kit===2?.16+space*.15:kit===3?.07+space*.12:kit===4?.10+space*.12:.055+space*.11,
+  kit===1?.027:kit===2?.09:kit===3?.05:.045);
  const osc=(f,d,a,kind='sine',to=f,offset=0)=>oscillator(g,v,t+offset,{f:f*p,endF:to*p,d,a,type:kind,attack:kind==='sawtooth'?.002:.004});
  const hit=(d,a,hp=2400,offset=0)=>noise(g,v,t,{d,a,hp,offset:rand()*.87+offset});
  const band=(d,a,f,q=.8)=>noise(g,v,t,{d,a,bp:f,q,offset:rand()*.81});
@@ -231,6 +272,7 @@ function scheduleKitVoice(g,pad,time,params={}){
    if(n===3){[145,215,324,485].forEach((q,i)=>osc(q,.75+i*.11,.077,'triangle',q*(.93+rand()*.06),i*.017));}
   }
  }
+ tameLoopTail(v,t,params.role,id);
  return v;
 }
 
@@ -313,7 +355,7 @@ function makeSpeechBuffer(ctx,id){
 function scheduleSpeech(g,pad,time,params={}){
  const ctx=g.ctx,id=clamp(pad|0,0,15),t=Math.max(.001,time);
  const color=params.color||{},vel=clamp(params.velocity??.85,.18,1.1)*(params.hold?.76:1);
- const source=ctx.createBufferSource(),out=bus(g,t,vel*.50,.003,0);
+ const source=ctx.createBufferSource(),out=bus(g,t,vel*.50*padGain(5,id),.003,0);
  const env=ctx.createGain(),filter=ctx.createBiquadFilter(),[vowel,base,bend,dur,onset,bright,grit]=SPEECH_TABLE[id];
  source.buffer=makeSpeechBuffer(ctx,id);
  filter.type='lowpass';filter.frequency.value=clamp(3200+(color.broken??.24)*900,1700,5200);
@@ -353,8 +395,8 @@ function sliceBuffer(ctx,original,from,duration,{reverse=false,crush=false}={}){
    // True sample-and-hold decimation plus low-bit-depth quantization.
    let held=0;
    for(let i=0;i<n;i++){
-    if(i%8===0)held=Math.round(input[start+i]*13)/13;
-    out[i]=held;
+    if(i%6===0)held=Math.round(input[start+i]*23)/23;
+    out[i]=held*.68+input[start+i]*.32;
    }
   }else{
    for(let i=0;i<n;i++)out[i]=input[start+(reverse?n-1-i:i)];
@@ -369,16 +411,17 @@ function scheduleAccident(g,pad,at,kind,params={},bpm=100,source){
  // Level the transformed one-shot conservatively so short stutters stay audible.
  let sourcePeak=0;const probe=source.getChannelData(0),scan=Math.min(probe.length,Math.floor(source.sampleRate*.55));
  for(let i=0;i<scan;i+=4)sourcePeak=Math.max(sourcePeak,Math.abs(probe[i]));
- const gainMatch=clamp(.14/Math.max(.035,sourcePeak),.75,2);
- const level=c.createGain();level.gain.value=clamp(velocity*gainMatch,.36,1.25);level.connect(g.dry);
+ const gainMatch=clamp(.17/Math.max(.065,sourcePeak),.72,1.42);
+ const level=c.createGain();level.gain.value=clamp(velocity*gainMatch*.94,.24,1.02);level.connect(g.dry);
  const start=.014,usable=Math.max(.045,source.duration-start-.025);
  const clip=(offset,duration,when,rate=1,reverse=false,crush=false,volume=1,fade=.008)=>{
   const length=Math.max(.025,Math.min(duration,usable-offset)),sample=sliceBuffer(c,source,start+offset,length,{reverse,crush});
   const src=c.createBufferSource(),amp=c.createGain(),end=when+(length/rate);
   src.buffer=sample;src.playbackRate.value=rate;
   amp.gain.setValueAtTime(.00001,when);
-  amp.gain.linearRampToValueAtTime(Math.max(.0001,volume),when+Math.min(fade,length/rate*.2));
-  amp.gain.setValueAtTime(Math.max(.0001,volume),Math.max(when+.003,end-.012));
+  const fadeTime=Math.min(Math.max(.006,fade),length/rate*.24);
+  amp.gain.linearRampToValueAtTime(Math.max(.0001,volume),when+fadeTime);
+  amp.gain.setValueAtTime(Math.max(.0001,volume),Math.max(when+fadeTime+.001,end-fadeTime));
   amp.gain.linearRampToValueAtTime(.00001,end);
   src.connect(amp);amp.connect(level);src.start(when);src.stop(end+.002);
   return {src,amp,end};
@@ -386,11 +429,21 @@ function scheduleAccident(g,pad,at,kind,params={},bpm=100,source){
  if(kind===0){
   // Repeat an actual transient of the selected note; each hit replaces it.
   const stride=Math.max(.043,beat/8),duration=Math.min(stride*.73,.085,usable);
-  for(let i=0;i<4;i++)clip(0,duration,t+i*stride,1,false,false,.88-i*.13,.003);
+  // Catch the recognizable body of the sound instead of repeatedly sampling
+  // a silent onset. Keep the search short to avoid work on the audio scheduler.
+  const samples=source.getChannelData(0),sr=source.sampleRate;
+  let offset=0,best=-1;
+  const searchEnd=Math.min(.15,Math.max(0,usable-duration)),windowSize=Math.max(16,Math.floor(Math.min(.020,duration*.55)*sr));
+  for(let s=0;s<=searchEnd;s+=.012){
+   let energy=0;const from=Math.floor((start+s)*sr);
+   for(let k=0;k<windowSize;k+=3){const v=samples[from+k]||0;energy+=v*v;}
+   if(energy>best){best=energy;offset=s;}
+  }
+  for(let i=0;i<4;i++)clip(offset,duration,t+i*stride,1,false,false,.78-i*.10,.007);
  }else if(kind===1){
   // Reverse real sound including its formants and texture, not synthesized noise.
   const duration=Math.min(.40,beat*.78,usable);
-  clip(0,duration,t,1,true,false,.9,.006);
+  clip(0,duration,t,1,true,false,.69,.011);
  }else if(kind===2){
   // Natural pitch/speed fall using a tape-style playback-rate envelope.
   const duration=Math.min(.70,beat*1.12,usable),sample=sliceBuffer(c,source,start,duration);
@@ -400,15 +453,15 @@ function scheduleAccident(g,pad,at,kind,params={},bpm=100,source){
   lowpass.type='lowpass';lowpass.frequency.setValueAtTime(3800,t);
   lowpass.frequency.exponentialRampToValueAtTime(680,t+Math.min(.55,beat));
   const playDuration=Math.min(.72,beat*1.5);
-  amp.gain.setValueAtTime(.00001,t);amp.gain.linearRampToValueAtTime(.85,t+.012);
-  amp.gain.setValueAtTime(.85,t+playDuration*.55);
+  amp.gain.setValueAtTime(.00001,t);amp.gain.linearRampToValueAtTime(.72,t+.016);
+  amp.gain.setValueAtTime(.72,t+playDuration*.55);
   amp.gain.linearRampToValueAtTime(.00001,t+playDuration);
   src.connect(lowpass);lowpass.connect(amp);amp.connect(level);
   src.start(t);src.stop(t+playDuration+.006);
  }else if(kind===3){
   const duration=Math.min(.40,beat*.68,usable);
   // A real PCM bitcrush rather than a waveshaper imitation.
-  clip(0,duration,t,1,false,true,.78,.005);
+  clip(0,duration,t,1,false,true,.70,.012);
  }
  return {kind,pad,time:t,source:'rendered-pad'};
 }
