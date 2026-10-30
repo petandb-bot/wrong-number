@@ -1,4 +1,4 @@
-/* WRONG NUMBER v0.3.1 — LITTLE PERFORMANCE MACHINE */
+/* WRONG NUMBER v0.3.4 — PLAYABLE CORE */
 :root{font-family:ui-rounded,system-ui,-apple-system,"Arial Rounded MT Bold",sans-serif;color:#30113b;background:#301036;font-synthesis:none;-webkit-text-size-adjust:100%}
 *{box-sizing:border-box}html{min-height:100%;background:#301036}body{margin:0;min-height:100dvh;padding:calc(env(safe-area-inset-top) + 6px) 8px calc(env(safe-area-inset-bottom) + 4px);background:radial-gradient(ellipse at 50% 0%,#6f224f,#2c113b 64%);touch-action:manipulation;overscroll-behavior-y:contain}
 button{font:inherit;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation;user-select:none;-webkit-user-select:none;color:inherit}button:focus-visible,summary:focus-visible,a:focus-visible{outline:3px solid #cbf542;outline-offset:3px}button:disabled{filter:grayscale(.5);opacity:.55;cursor:not-allowed}

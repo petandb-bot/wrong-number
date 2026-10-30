@@ -1,4 +1,4 @@
-/* WRONG NUMBER v0.3.1 — SHORT CIRCUITS / stability review */
+/* WRONG NUMBER v0.3.4 — PLAYABLE CORE / full maintenance */
 (()=>{'use strict';
 const A=window.WrongAudio,I=window.WrongIcons; if(!A||!I){document.body.textContent='AUDIO ENGINE FAILED';return;}
 const $=id=>document.getElementById(id), N=32, STORE='wrong-number-session-0.1', HISTORY='wrong-number-undo-0.2.3', SLOTS='wrong-number-slots-0.3';
@@ -15,7 +15,7 @@ let scene=validateScene(getSaved(STORE))||newScene();
 let live=null,engine=null,isPlaying=false,scheduler=null,nextStep=0,nextTick=0,loopStarted=0,cycleAnchor=0,perfCounter=0,lastPadAt=new Map(),recent=[],downPointers=new Map(),pulseUntil=new Array(16).fill(0),lastPad=-1,displayMessage='READY / TOUCH A PAD',messageUntil=0,renderBusy=false,wavUrl=null,wavFile=null,tape=null,tapeClock=null,undoStack=(Array.isArray(getSaved(HISTORY))?getSaved(HISTORY):[]).slice(-8).map(validateScene).filter(Boolean);
 // JAM is always live and non-destructive. DUB is armed explicitly and stores
 // quantized events for the NEXT pass, never doubling the currently played tap.
-let dubArmed=false,pendingDub=[],dubUndoSaved=false,dubSessionCount=0,backingGraph=null;
+let dubArmed=false,pendingDub=[],dubSessionCount=0,backingGraph=null;
 let countInEndAt=0,buildTake=0,streaks=new Map(),accidentUntil=0,accentBunny=1;
 let replyTimer=null,replyCooldown=0,replyCount=0,phraseHits=[];
 let lcdScreen='rabbits',stepGroup=0;
@@ -27,9 +27,10 @@ let selectedSlot=-1,queuedSlot=-1;
 // Source snippets are pre-rendered on the first pad attack, then reused for deliberate gestures.
 const gestureSources=new Map();
 const GESTURE_LIMIT=12;
+let gestureCooldownUntil=0;
 
 let cycleSerial=0,activeAccident=null,fxUntil=0,fxLabel='';
-let fxMode='SOFT'; // OFF / SOFT / WILD, switched by holding the LCD.
+let fxMode=['OFF','SOFT','WILD'].includes(getSaved('wrong-number-fx-mode'))?getSaved('wrong-number-fx-mode'):'SOFT'; // Persistent, deliberately minimal FX control.
 const fxCache=new Map(),FX_CACHE_LIMIT=10;
 const fxParams=(plan,pattern)=>({kit:pattern.kit,seed:plan.sourceSeed,
  velocity:plan.velocity,color:{...pattern.color,shift:A.clamp(pattern.color.shift+(plan.expression||0),-2,2)},role:'fx'});
@@ -122,6 +123,7 @@ function loadSlot(index){
 function applySlot(index){
  const next=validateScene(savedSlots[index]);if(!next){message('EMPTY SLOT',1);return;}
  rememberUndo();scene=next;selectedSlot=index;queuedSlot=-1;
+ gestureSources.clear();fxReady.clear();
  updatePadNames();persist();updateSlots();message(`LOADED / SLOT ${slotNames[index]}`,1.6);
 }
 
@@ -153,7 +155,7 @@ function updateText(){
  $('btn-loop').setAttribute('aria-pressed',String(isPlaying));
  $('btn-dub').setAttribute('aria-pressed',String(dubArmed));
  $('btn-dub').setAttribute('aria-label',dubArmed?'Stop overdub recording':'Start overdub recording');
- $('btn-dub').querySelector('small').textContent=dubArmed?'● RECORDING':'OVERDUB';
+ $('btn-dub').querySelector('small').textContent=dubArmed?`● ${pendingDub.length} QUEUED`:'OVERDUB';
  $('live-message').textContent=`${countInActive()?'READY '+readyBeats():dubArmed?(scene.groove==='empty'?'● TAKE '+Math.max(1,buildTake):'● DUB +'+pendingDub.length):isPlaying?'JAM':'READY'} / ${A.KIT_SHORT[scene.kit]} / ${scene.events.length.toString().padStart(2,'0')} HITS / ${scene.groove==='full'?'FULL':scene.groove==='empty'?'BLANK':'SPACE'}`; 
  updateKitUi();updateSlots();
 }
@@ -226,7 +228,6 @@ function queueDub(pad,velocity,at,expression=0){
  const step=snapToStep(at);
  // Repeated hits on the same pad and grid step should not stack and clip.
  const found=pendingDub.find(e=>family(e.pad)===family(pad)&&circularDistance(e.step,step)<=1);
- if(!dubUndoSaved){rememberUndo();dubUndoSaved=true;}
  if(found){found.pad=pad;found.step=step;found.velocity=Math.max(found.velocity,velocity);found.expression=expression;updateText();return;}
  pendingDub.push({pad,step,velocity,variant:randomSeed(),origin:'dub',expression});
  dubSessionCount++;
@@ -239,8 +240,10 @@ function commitDub(){
  // It cannot silently push the whole groove towards 64 overlapping events.
  const joined=[...scene.events,...pendingDub];
  const cap=scene.groove==='full'?40:28;
- scene.events=balancePattern(joined,cap);
- pendingDub=[];dubUndoSaved=false;persist();
+ const result=balancePattern(joined,cap);
+ // An overdub is one atomic undo step per committed pass, not one step per finger hit.
+ if(JSON.stringify(result)!==JSON.stringify(scene.events)){rememberUndo();scene.events=result;}
+ pendingDub=[];persist();
  return count;
 }
 function setDub(armed){
@@ -248,11 +251,11 @@ function setDub(armed){
   if(replyTimer){clearTimeout(replyTimer);replyTimer=null;}phraseHits=[];
   if(!isPlaying)startLoop();
   if(!isPlaying)return;
-  dubArmed=true;dubUndoSaved=false;dubSessionCount=0;
+  dubArmed=true;dubSessionCount=0;
   message(countInActive()?'READY / FOUR BEATS':scene.groove==='empty'?'● BUILD / KEEP GOING':'● DUB / TAP TO RECORD',2);
  }else{
   commitDub();
-  dubArmed=false;dubUndoSaved=false;
+  dubArmed=false;
   if(countInActive())startLoop();
   message(dubSessionCount?`DUB SAVED / +${dubSessionCount} HITS`:'JAM / PLAY FREELY',2);
  }
@@ -272,7 +275,7 @@ function maybeReply(pad,now){
   if(!isPlaying||dubArmed||countInActive()||stateAt()-now<.36)return;
   const candidate=[5,9,4,6][Math.floor(from/4)];
   const when=stateAt()+.01;
-  synth(candidate,when,.39,{seed:randomSeed(),role:'jam',color:{...scene.color,shift:scene.color.shift-.12}});
+  synth(candidate,when,.27,{seed:randomSeed(),role:'jam',color:{...scene.color,shift:scene.color.shift-.12}});
   accentBunny=2;accidentUntil=performance.now()+420;
   replyCount++;replyCooldown=stateAt()+5;
   phraseHits=[];
@@ -317,9 +320,10 @@ function playPad(pad,options={}){
  const liveColor={...scene.color,shift:A.clamp(scene.color.shift+expression+(options.hold?Math.sin(evolving*1.3)*.22:0),-2,2),broken:A.clamp(scene.color.broken+evolving*.055,0,1)};
  duckBacking(now);
  // Repeated attacks unlock actual transformed-source gestures; first tap never waits for FX.
- const gesture=(options.hold&&evolving>=3&&evolving%3===0)||(!options.hold&&streak>=2&&streak%3===2);
+ const gesture=(options.hold&&evolving>=3&&evolving%4===0)||(!options.hold&&streak>=2&&streak%3===2);
  const kind=(pad+scene.kit+evolving)%4;
- const transformed=gesture&&performGestureFx(pad,now+.003,kind,velocity*.92);
+ const transformed=gesture&&!dubArmed&&now>=gestureCooldownUntil&&performGestureFx(pad,now+.003,kind,velocity*.78);
+ if(transformed)gestureCooldownUntil=now+.42; // Avoid FX pileups during rapid multi-pad playing.
  if(!transformed)synth(pad,now+.003,velocity,{hold:options.hold,fire:rapid||options.hold,color:liveColor,role:'jam'});
  if((!options.hold&&streak===1)||(options.hold&&evolving===1))prewarmGesture(pad);
  if(streak>=3&&performance.now()>accidentUntil){accentBunny=pad%3;accidentUntil=performance.now()+650;}
@@ -459,7 +463,7 @@ function captureRecent(){
  if(fromHands.length<4){const background=generateOpen(scene.seed).filter(e=>e.pad<4||e.pad===7).slice(0,5);return balancePattern([...fromHands.map(e=>({...e,origin:'dub'})),...background],16);}
  return balancePattern(fromHands.map(e=>({...e,origin:'dub'})),24);
 }
-function stopLoop(){if(replyTimer){clearTimeout(replyTimer);replyTimer=null;}phraseHits=[];if(dubArmed){commitDub();dubArmed=false;dubUndoSaved=false;}isPlaying=false;countInEndAt=0;buildTake=0;activeAccident=null;cycleSerial=0;queuedSlot=-1;clearInterval(scheduler);scheduler=null;nextStep=0;message('LOOP STOPPED / JAM READY');updateText();}
+function stopLoop(){if(replyTimer){clearTimeout(replyTimer);replyTimer=null;}phraseHits=[];if(dubArmed){commitDub();dubArmed=false;}isPlaying=false;countInEndAt=0;buildTake=0;activeAccident=null;cycleSerial=0;queuedSlot=-1;clearInterval(scheduler);scheduler=null;nextStep=0;message('LOOP STOPPED / JAM READY');updateText();}
 function startLoop({countIn=false}={}){
  if(!ensureAudio())return;
  if(scene.events.length===0&&scene.groove!=='empty')scene.events=captureRecent();
@@ -521,25 +525,25 @@ function saveHistory(){try{localStorage.setItem(HISTORY,JSON.stringify(undoStack
 function rememberUndo(){undoStack.push(deepCopy(scene));if(undoStack.length>8)undoStack.shift();saveHistory();}
 function resetPlayhead(){if(isPlaying){nextStep=0;nextTick=stateAt()+.07;loopStarted=nextTick;cycleAnchor=nextTick;countInEndAt=0;}}
 function undo(){
+ if(dubArmed&&scene.groove==='empty'&&!scene.events.length&&!pendingDub.length){message('NOTHING TO UNDO',1.4);return;}
  // During recording, first undo the most recent not-yet-committed pad hit.
  if(dubArmed&&pendingDub.length){
   pendingDub.pop();dubSessionCount=Math.max(0,dubSessionCount-1);
-  if(!pendingDub.length&&dubUndoSaved){undoStack.pop();saveHistory();dubUndoSaved=false;}
   updateText();message('UNDO / LAST HIT',1.1);return;
  }
  if(!undoStack.length){message('NOTHING TO UNDO',1.4);return;}
  const wasBlank=scene.groove==='empty';
  scene=undoStack.pop();saveHistory();
  // Undo a take without leaving BLANK, unless the BLANK creation itself was undone.
- if(dubArmed){pendingDub=[];dubUndoSaved=false;dubSessionCount=0;if(wasBlank&&scene.groove!=='empty')dubArmed=false;}
+ if(dubArmed){pendingDub=[];dubSessionCount=0;if(wasBlank&&scene.groove!=='empty')dubArmed=false;}
  resetPlayhead();persist();message('UNDO / PREVIOUS BEAT',1.5);
 }
 function mutate(strong=false){
  if(!scene.events.length&&scene.groove==='empty'){message('BLANK / RECORD SOME PADS FIRST',2);return;}
  if(dubArmed)setDub(false);
- rememberUndo();
  if(!scene.events.length)scene.events=captureRecent();
  if(!scene.events.length){message('PLAY A FEW PADS FIRST',2);return;}
+ rememberUndo();
  const original=scene.events.map(e=>({...e}));
  const r=A.rng((scene.seed^randomSeed())>>>0);
  // Rearrange a phrase, not layer new notes on top of it.
@@ -608,7 +612,7 @@ function blank(keepTempo=false){
  rememberUndo();
  const bpm=!keepTempo&&scene.bpm>110?96:scene.bpm;
  scene={...newScene(),bpm,kit:scene.kit,groove:'empty',events:[]};
- recent=[];pendingDub=[];dubArmed=true;dubUndoSaved=false;dubSessionCount=0;
+ recent=[];pendingDub=[];dubArmed=true;dubSessionCount=0;
  blankUntil=performance.now()+1400;
  accentBunny=1;accidentUntil=performance.now()+800;
  startLoop({countIn:true});
@@ -620,6 +624,7 @@ function bindControls(){
  const display=$('display-view');
  let lcdDown=0,lcdHandled=0;
  const changeFxMode=()=>{fxMode=fxMode==='SOFT'?'WILD':fxMode==='WILD'?'OFF':'SOFT';activeAccident=null;
+  try{localStorage.setItem('wrong-number-fx-mode',JSON.stringify(fxMode));}catch{}
   message('FX / '+fxMode,1.6);};
  display.addEventListener('pointerdown',()=>{lcdDown=performance.now();});
  display.addEventListener('pointerup',()=>{if(lcdDown&&performance.now()-lcdDown>=650){lcdHandled=performance.now();changeFxMode();}lcdDown=0;});
@@ -721,7 +726,11 @@ function bindControls(){
  window.addEventListener('keydown',e=>{if(e.altKey||e.ctrlKey||e.metaKey||e.repeat||e.target.matches('input,textarea'))return;const k=e.key.toLowerCase(),pad=keys.indexOf(k);if(pad===-1||held.has(k))return;e.preventDefault();held.add(k);$('pads').children[pad].classList.add('is-down');playPad(pad);beginHold(`key:${k}`,pad);});
  window.addEventListener('keyup',e=>{const k=e.key.toLowerCase(),pad=keys.indexOf(k);held.delete(k);if(pad!==-1){endHold(`key:${k}`);$('pads').children[pad].classList.remove('is-down');}});
  document.addEventListener('visibilitychange',()=>{
-  if(document.hidden){if(tape)stopTape();if(isPlaying){stopLoop();message('PAUSED / RETURN & TAP LOOP',3);}}
+  if(document.hidden){
+   for(const key of [...downPointers.keys()])endHold(key);
+   if(tape)stopTape();
+   if(isPlaying){stopLoop();message('PAUSED / RETURN & TAP LOOP',3);}
+  }
   else if(live&&live.state!=='running'){message('TAP ANY PAD TO REARM AUDIO',4);}
  });
 }
@@ -895,42 +904,52 @@ function paint(ctx,w,h){
  ctx.globalAlpha=1;
  if(lcdScreen==='steps'){paintSequence(ctx,w,h,{dark,light,inner,medium});return;}
  // Three full-body LCD sprites on a tiny moving stage. No image assets.
- const scale=Math.max(.75,Math.min((h-9)/50,(w-32)/(3*27+2*24)));
+ const scale=Math.max(.65,Math.min((h-9)/50,(w-32)/(3*27+2*24)));
  const floorY=Math.round(h-4);
  const pix=(x,y,ww,hh,color=dark)=>{ctx.fillStyle=color;ctx.fillRect(Math.round(x),Math.round(y),Math.max(1,Math.round(ww)),Math.max(1,Math.round(hh)));};
  // Each rabbit has its own four-step comic dance, not a synchronized head wobble.
  function bunny(n,pose,accident=false){
   const step=((pose%4)+4)%4,hop=step===1||step===3;
   const left=w*(.19+n*.31)-13.5*scale;
-  const base=(h-46*scale)/2+(hop?-2.5:0)*scale;
-  const glide=step===1?-1.7:step===3?1.7:0;
-  ctx.save();
-  ctx.translate(Math.round(left+glide*scale),Math.round(base));
-  if(accident){ctx.translate(14*scale,32*scale);ctx.rotate(n===1?-.45:.42);ctx.translate(-14*scale,-32*scale);}
+  const floorBase=(h-46*scale)/2;
+  const glide=step===1?-1.3:step===3?1.3:0;
+  const dancing=isPlaying||hit||building||brandNew;
+  const bow=dancing&&n===1&&beat%12===7;
+  const bounce=hop?2.5:0;
+  ctx.save();ctx.translate(Math.round(left+glide*scale),Math.round(floorBase-bounce*scale+(bow?2*scale:0)));
+  if(accident){ctx.translate(13.5*scale,37*scale);ctx.rotate(n===1?-.30:.27);ctx.translate(-13.5*scale,-37*scale);}
   const p=(x,y,ww,hh,color=dark)=>pix(x*scale,y*scale,ww*scale,hh*scale,color);
-  // Two highly legible ears, a large face, and a distinctly separate little body.
-  p(5,1,5,11);p(17,0,5,12);
-  p(7,3,2,7,inner);p(19,2,2,8,inner);
-  if(step===2)p(3,4,4,2); // Wiggling ear tip.
-  p(5,9,17,2);p(3,11,21,3);p(2,14,23,11);p(4,25,19,3);p(7,28,13,2);
-  p(5,13,17,11,light);p(6,11,15,3,light);p(6,24,15,3,light);
-  p(2,21,2,2,inner);p(23,21,2,2,inner);
-  const blink=(Math.floor(now/200)+n*7)%31===0;
+  // Softly tapered ears, with the inner ear following the beat.
+  const leftEar=step===3?2:0,rightEar=step===1?2:0;
+  p(5+leftEar,2,6,12);p(17+rightEar,1,6,13);
+  p(7+leftEar,4,2,8,inner);p(19+rightEar,3,2,8,inner);
+  p(6+leftEar,1,4,2);p(18+rightEar,0,4,2);
+  // Oversized rounded head, small silhouette cheeks, generous forehead.
+  p(5,12,17,2);p(3,14,21,3);p(2,17,23,10);p(4,27,19,3);p(7,30,13,2);
+  p(5,15,17,12,light);p(4,18,19,8,light);p(6,27,15,2,light);
+  p(2,23,3,3,inner);p(22,23,3,3,inner);
+  const blink=(Math.floor(now/220)+n*11)%39===0;
   const surprised=(glitch||accident)&&n===accentBunny;
-  if(surprised){p(7,17,3,4);p(17,17,3,4);p(12,23,3,3);}
-  else if(blink){p(7,20,3,1);p(17,20,3,1);p(12,22,3,2);}
-  else {p(8,18,2,3);p(17,18,2,3);p(8,18,1,1,light);p(17,18,1,1,light);p(12,22,3,2);p(11,25,2,1);p(15,25,2,1);}
-  p(5,23,3,1,inner);p(19,23,3,1,inner);
-  // Rounded torso / small contrasting belly / lively independent hands.
-  p(7,29,13,11);p(9,31,9,8,light);
-  if(step===0){p(3,32,5,4);p(19,32,5,4);}
-  if(step===1){p(2,28,6,3);p(20,31,6,3);}
-  if(step===2){p(3,33,5,4);p(19,28,6,3);}
-  if(step===3){p(3,30,5,3);p(19,26,5,3);}
-  // Two short legs and feet that genuinely hop and alternate.
-  if(step===2){p(7,39,5,5);p(16,38,5,4);p(6,43,7,3);p(16,41,7,3);}
-  else {p(7,39,5,4);p(16,39,5,4);p(5,42,8,3);p(16,42,8,3);}
-  p(21,34,3,3); // Round tail.
+  // Eyes and cheeks are made of discrete pixels, not emoji or vector ellipses.
+  if(surprised){p(7,20,3,4);p(17,20,3,4);p(12,26,3,3);}
+  else if(blink){p(7,23,4,1);p(17,23,4,1);p(12,26,3,2);}
+  else{
+   p(8,21,2,3);p(17,21,2,3);
+   p(12,26,3,2);p(11,28,2,1);p(15,28,2,1);
+   if(n===1&&dancing&&step===2){p(17,22,3,1,light);}
+  }
+  p(5,25,3,2,inner);p(19,25,3,2,inner);
+  // A small pear-shaped body with tiny hands and feet. Never a cropped bust.
+  p(8,32,11,9);p(10,34,7,6,light);
+  if(bow){p(2,33,6,3);p(19,33,6,3);}
+  else if(step===0){p(3,34,5,4);p(19,34,5,4);}
+  else if(step===1){p(1,30,7,3);p(20,35,6,3);}
+  else if(step===2){p(3,36,5,3);p(19,29,7,3);}
+  else{p(3,31,5,3);p(20,29,5,3);}
+  // Alternating little feet make rhythm clear even without a metronome.
+  if(step===2){p(8,40,4,4);p(16,41,4,3);p(6,43,8,2);p(16,44,7,2);}
+  else {p(8,41,4,3);p(16,40,4,4);p(6,44,8,2);p(16,43,7,2);}
+  p(20,36,3,3);
   ctx.restore();
  }
  const cycleStep=isPlaying?((Math.floor((stateAt()-cycleAnchor)/stepSeconds())%N+N)%N):0;
@@ -947,16 +966,21 @@ function paint(ctx,w,h){
   }
  }
  for(let n=0;n<3;n++){
-  const pose=building?(beat+n)%4:glitch?(beat+n*2)%4:brandNew?(beat+3-n)%4:(beat+n)%4;
+  // A brief delayed response on every eighth beat: the rabbits are a trio, not clones.
+  const phrase=(beat%8===6&&n===2)?beat-1:(beat%16===11&&n===0?beat+1:beat);
+  const pose=building?(phrase+n)%4:glitch?(phrase+n*2)%4:brandNew?(phrase+3-n)%4:(phrase+n)%4;
   const stumble=(trip&&n===1)||(accidental&&n===accentBunny)||(glitch&&n===beat%3&&cycleStep%8===0);
   bunny(n,pose,stumble);
  }
+ // Rabbit call and response on alternating beats.
+ if(isPlaying&&beat%8===2){const x=w*.34,y=h*.52;pix(x,y,4*scale,2*scale,medium);pix(x+5*scale,y-3*scale,2*scale,2*scale,medium);}
+ if(isPlaying&&beat%8===3){const x=w*.66,y=h*.49;pix(x,y,4*scale,2*scale,medium);pix(x-3*scale,y-3*scale,2*scale,2*scale,medium);}
  // Comic 'accidents': stars pop OUTSIDE the characters and disappear quickly.
  const sparkle=(x,y)=>{pix(x-1,y,3,1,dark);pix(x,y-1,1,3,dark);pix(x+3,y-2,2,2,medium);};
  const flick=Math.floor(now/160)%4;
  if(isPlaying||hit||building||brandNew){
-  sparkle(w*.345,h*.30+(flick%2)*3);
-  if(flick===1||flick===3)sparkle(w*.67,h*.22);
+  sparkle(w*.355,h*.13+(flick%2)*2);
+  if(flick===1||flick===3)sparkle(w*.665,h*.10);
  }
  if(accidental||glitch||trip){
   const x=w*(.19+accentBunny*.31)+22*scale,y=h*.20;
@@ -1026,7 +1050,7 @@ function attemptP5(){
  script.onerror=()=>console.info('p5 CDN unavailable; internal Canvas fallback active');
  document.head.appendChild(script);
 }
-function init(){renderPads();bindControls();updateSlots();updateText();startCanvasFallback();attemptP5();if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('./sw.js?v=0.3.0', {updateViaCache:'none'}).catch(err=>console.warn('SW:',err));}
+function init(){renderPads();bindControls();updateSlots();updateText();startCanvasFallback();attemptP5();if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('./sw.js?v=0.3.4', {updateViaCache:'none'}).catch(err=>console.warn('SW:',err));}
 init();
 window.WrongNumberDebug={getTapeEventKinds:()=>tape?tape.events.map(e=>e.fx?'fx':e.params?.role||'note'):[],getSlots:()=>deepCopy(savedSlots),getSelectedSlot:()=>selectedSlot,getQueuedSlot:()=>queuedSlot,saveSlot,loadSlot,applySlot,gestureSpec,prewarmGesture,performGestureFx,stepGroup:()=>stepGroup,lcdScreen:()=>lcdScreen,toggleLcd,getUndoCount:()=>undoStack.length,saveHistory,queueDub,paintSequence,chooseAccident,scheduleFx,exportWav,cycleSerial:()=>cycleSerial,activeAccident:()=>activeAccident,blank,countInActive,readyBeats,getCountInEnd:()=>countInEndAt,getTake:()=>buildTake,getReplies:()=>replyCount,flashNew,balancePattern,generateOpen,generateFull,getScene:()=>deepCopy(scene),isPlaying:()=>isPlaying,isRecording:()=>!!tape,isDubArmed:()=>dubArmed,pendingDub:()=>deepCopy(pendingDub),setDub,commitDub,snapToStep,cycleAnchor:()=>cycleAnchor,visualState:()=>({blankUntil,newUntil,glitchUntil,fxMode}),playPad,captureRecent,mutate,fresh,undo,startLoop,stopLoop,startTape,stopTape,exportWav,renderPads,setKit,kitLabel,audioState:()=>({context:live?.state||'none',kit:scene.kit,master:engine?.dry?.gain?.value??null})};
 })();

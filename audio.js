@@ -1,4 +1,4 @@
-/* WRONG NUMBER audio engine v0.2.4 — procedural instruments and real one-shot FX. */
+/* WRONG NUMBER audio engine v0.3.4 — procedural instruments and real one-shot FX. */
 (()=>{'use strict';
 const TAU=Math.PI*2, clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
 function rng(seed){let a=seed>>>0;return ()=>{a+=0x6D2B79F5;let t=a;t=Math.imul(t^(t>>>15),t|1);t^=t+Math.imul(t^(t>>>7),t|61);return((t^(t>>>14))>>>0)/4294967296;};}
@@ -305,7 +305,7 @@ function makeSpeechBuffer(ctx,id){
   peak=Math.max(peak,Math.abs(hold));
  }
  // Each pad is level-matched while preserving stronger/weaker articulation.
- const scale=Math.min(4.0,.52/Math.max(.001,peak));
+ const scale=Math.min(3.5,.37/Math.max(.001,peak));
  for(let i=0;i<n;i++)data[i]*=scale;
  bank.set(id,buf);
  return buf;
@@ -313,10 +313,10 @@ function makeSpeechBuffer(ctx,id){
 function scheduleSpeech(g,pad,time,params={}){
  const ctx=g.ctx,id=clamp(pad|0,0,15),t=Math.max(.001,time);
  const color=params.color||{},vel=clamp(params.velocity??.85,.18,1.1)*(params.hold?.76:1);
- const source=ctx.createBufferSource(),out=bus(g,t,vel*.67,.008,0);
+ const source=ctx.createBufferSource(),out=bus(g,t,vel*.50,.003,0);
  const env=ctx.createGain(),filter=ctx.createBiquadFilter(),[vowel,base,bend,dur,onset,bright,grit]=SPEECH_TABLE[id];
  source.buffer=makeSpeechBuffer(ctx,id);
- filter.type='lowpass';filter.frequency.value=clamp(3600+(color.broken??.24)*900,1700,5600);
+ filter.type='lowpass';filter.frequency.value=clamp(3200+(color.broken??.24)*900,1700,5200);
  filter.Q.value=.35;
  const shift=clamp((color.shift||0)*1.4+(params.fire?.35:0),-5,5);
  source.playbackRate.value=Math.pow(2,shift/12);
